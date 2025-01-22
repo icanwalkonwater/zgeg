@@ -21,6 +21,9 @@
           packages = [
             self'.formatter
             pkgs.tree-sitter
+            pkgs.nodejs
+            pkgs.typescript
+            pkgs.typescript-language-server
           ];
         };
 
