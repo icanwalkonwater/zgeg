@@ -24,6 +24,9 @@
             pkgs.nodejs
             pkgs.typescript
             pkgs.typescript-language-server
+            pkgs.rustc
+            pkgs.cargo
+            pkgs.rust-analyzer
           ];
 
           shellHook = ''

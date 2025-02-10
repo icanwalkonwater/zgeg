@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/zgegc"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+tree-sitter = "0.25"
+tree-sitter-zgeg = { path = "../tree-sitter-zgeg" }
+cc = "1.2"
