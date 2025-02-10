@@ -1,0 +1,154 @@
+===========
+Hello world
+===========
+
+fun main() {
+  print("Hello World !");
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (function_call
+        name: (identifier)
+        arguments: (string_literal)))))
+
+=========
+Variables
+=========
+
+fun main() {
+  let a;
+  let b: u32;
+  let c = 1 + 1;
+  let d = "hello";
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (let_statement
+        name: (identifier))
+      statements: (let_statement
+        name: (identifier)
+        type: (type
+          (builtin_type)))
+      statements: (let_statement
+        name: (identifier)
+        initializer: (binary_expression
+          left: (number_literal)
+          right: (number_literal)))
+      statements: (let_statement
+        name: (identifier)
+        initializer: (string_literal)))))
+
+=====
+If
+=====
+
+fun main() {
+  if 5 < a && a < 20 {
+    print("uwu");
+  };
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (if_expression
+        (binary_expression
+          left: (binary_expression
+            left: (binary_expression
+              left: (number_literal)
+              right: (identifier))
+            right: (identifier))
+          right: (number_literal))
+        (block
+          statements: (function_call
+            name: (identifier)
+            arguments: (string_literal)))))))
+
+=============
+Infinite loop
+=============
+
+fun main() {
+  loop {};
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (loop_expression
+        (block)))))
+
+=============
+For emulation
+=============
+
+fun main() {
+  let i = 0;
+  loop {
+    if i >= 5 {
+      return;
+    };
+    print("{i}");
+  };
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (let_statement
+        name: (identifier)
+        initializer: (number_literal))
+      statements: (loop_expression
+        (block
+          statements: (if_expression
+            (binary_expression
+              left: (identifier)
+              right: (number_literal))
+            (block
+              statements: (return_statement)))
+          statements: (function_call
+            name: (identifier)
+            arguments: (string_literal)))))))
+
+========
+Addition
+========
+
+fun main() {
+  1 + 2 * 3 / (4 + 5);
+}
+
+---
+
+(source_file
+  (function_item
+    name: (identifier)
+    body: (block
+      statements: (binary_expression
+        left: (number_literal)
+        right: (binary_expression
+          left: (binary_expression
+            left: (number_literal)
+            right: (number_literal))
+          right: (binary_expression
+            left: (number_literal)
+            right: (number_literal)))))))
