@@ -80,11 +80,11 @@ pub struct FunctionCall {
     pub parameters: Vec<Ast<Expression>>,
 }
 
-enum Literal {
+pub enum Literal {
     String(Ast<String>),
     Number(Ast<String>),
 }
 
-struct Type(pub Ast<Identifier>);
+pub struct Type(pub Ast<Identifier>);
 
-struct Identifier(pub Ast<String>);
+pub struct Identifier(pub Ast<String>);

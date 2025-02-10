@@ -8,12 +8,12 @@ mod nodes;
 pub use nodes::*;
 mod parser;
 
-struct Ast<T> {
+pub struct Ast<T> {
     i: usize,
     _pd: PhantomData<T>,
 }
 
-struct AstManager {
+pub struct AstManager {
     storage: HashMap<TypeId, Box<dyn Any>>,
 }
 
