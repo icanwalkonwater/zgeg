@@ -25,6 +25,10 @@
             pkgs.typescript
             pkgs.typescript-language-server
           ];
+
+          shellHook = ''
+            source <(tree-sitter complete --shell bash)
+          '';
         };
 
         formatter = pkgs.alejandra;
