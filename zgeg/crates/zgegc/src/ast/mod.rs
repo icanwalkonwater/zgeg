@@ -7,18 +7,21 @@ use std::{
 mod nodes;
 pub use nodes::*;
 mod parser;
+pub use parser::parse;
 
+#[derive(Debug)]
 pub struct Ast<T> {
     i: usize,
     _pd: PhantomData<T>,
 }
 
+#[derive(Debug, Default)]
 pub struct AstManager {
     storage: HashMap<TypeId, Box<dyn Any>>,
 }
 
 impl AstManager {
-    fn get<T: 'static>(&self, handle: Ast<T>) -> &T {
+    pub fn get<T: 'static>(&self, handle: Ast<T>) -> &T {
         let v = self.storage.get(&TypeId::of::<T>()).unwrap();
         v.downcast_ref::<Vec<T>>().unwrap().get(handle.i).unwrap()
     }
