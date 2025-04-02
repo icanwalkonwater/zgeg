@@ -114,23 +114,23 @@ export default grammar({
     ),
 
     unary_expression: $ => prec("unary", seq(
-      choice("-", "+", "!", "~"),
-      $._expression,
+      field("op", choice("-", "+", "!", "~")),
+      field("value", $._expression),
     )),
 
     binary_expression: $ => choice(
-      prec.left("factor", seq(field("left", $._expression), "*", field("right", $._expression))),
-      prec.left("factor", seq(field("left", $._expression), "/", field("right", $._expression))),
-      prec.left("sum", seq(field("left", $._expression), "+", field("right", $._expression))),
-      prec.left("sum", seq(field("left", $._expression), "-", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "==", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "!=", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "<", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), ">", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "<=", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), ">=", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "&&", field("right", $._expression))),
-      prec.left("bool", seq(field("left", $._expression), "||", field("right", $._expression))),
+      prec.left("factor", seq(field("left", $._expression), field("op", "*"), field("right", $._expression))),
+      prec.left("factor", seq(field("left", $._expression), field("op", "/"), field("right", $._expression))),
+      prec.left("sum", seq(field("left", $._expression), field("op", "+"), field("right", $._expression))),
+      prec.left("sum", seq(field("left", $._expression), field("op", "-"), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "=="), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "!="), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "<"), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", ">"), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "<="), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", ">="), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "&&"), field("right", $._expression))),
+      prec.left("bool", seq(field("left", $._expression), field("op", "||"), field("right", $._expression))),
     ),
 
     function_call: $ => seq(
