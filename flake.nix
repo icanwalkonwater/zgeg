@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-25.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
@@ -20,13 +20,17 @@
         devShells.default = pkgs.mkShell {
           packages = [
             self'.formatter
+            pkgs.nil
             pkgs.tree-sitter
             pkgs.nodejs
             pkgs.typescript
             pkgs.typescript-language-server
             pkgs.rustc
             pkgs.cargo
+            pkgs.rustfmt
             pkgs.rust-analyzer
+            pkgs.rustup
+            pkgs.cargo-expand
           ];
 
           shellHook = ''
