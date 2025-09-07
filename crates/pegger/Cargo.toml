@@ -1,0 +1,8 @@
+[package]
+name = "pegger"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+regex.workspace = true
+pretty_assertions.workspace = true
