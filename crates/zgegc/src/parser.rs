@@ -1,10 +1,11 @@
 use pegger::PegGrammar;
 
+#[allow(non_snake_case)]
 pub fn make_zgeg_grammar() -> PegGrammar {
     use pegger::dsl::*;
 
     let mut g = PegGrammarBuilder::default();
-    g.set_trivia_rule_name("trivia");
+    g.set_trivia_rule_name("TRIVIA");
     setup_rules!(g;
         source_file,
         item, item_function,
@@ -18,14 +19,14 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         ty,
 
         ident, ident_prefix, ident_body,
-        whitespace, eol,
-        trivia,
+        whitespace, EOL,
+        TRIVIA,
     );
 
     source_file += star(EPS + &item) + eof();
     item += &item_function;
 
-    item_function += EPS - "fun" - &trivia - &ident + "(" + ")" + &block;
+    item_function += EPS - "fun" - &TRIVIA - &ident + "(" + ")" + &block;
 
     block += EPS - "{" - star(EPS + &instruction) + "}";
     instruction += EPS - &expression + ";";
@@ -46,14 +47,14 @@ pub fn make_zgeg_grammar() -> PegGrammar {
 
     whitespace += " ";
     whitespace += '\x09'..='\x0d';
-    eol += "\r\n";
-    eol += "\n";
-    eol += "\r";
+    EOL += "\r\n";
+    EOL += "\n";
+    EOL += "\r";
 
-    trivia += (EPS - &whitespace).plus() - opt(&trivia);
+    TRIVIA += (EPS - &whitespace).plus() - opt(&TRIVIA);
     // EOL is optional because it can be the end of file.
-    trivia += "//" - (not(&eol) - ANY).star() - opt(&eol) - opt(&trivia);
-    trivia += "/*" - (not("*/") - ANY).star() - "*/" - opt(&trivia);
+    TRIVIA += "//" - (not(&EOL) - ANY).star() - opt(&EOL) - opt(&TRIVIA);
+    TRIVIA += "/*" - (not("*/") - ANY).star() - "*/" - opt(&TRIVIA);
 
     g.build()
 }
