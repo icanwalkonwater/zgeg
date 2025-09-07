@@ -73,7 +73,7 @@ impl PegGrammarBuilder {
 /// ```
 #[macro_export]
 macro_rules! setup_rules {
-    ($grammar:expr; $($rule:ident),+) => {
+    ($grammar:expr; $($rule:ident),+ $(,)?) => {
         let [$(mut $rule),+] = $grammar.rules([$(stringify!($rule)),+]);
     };
 }
