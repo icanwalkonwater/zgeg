@@ -5,3 +5,4 @@ edition.workspace = true
 
 [dependencies]
 clap.workspace = true
+pegger = { path = "../pegger" }
