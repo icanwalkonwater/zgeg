@@ -27,7 +27,7 @@ impl PegGrammar {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PegRuleName(&'static str);
 
 impl Display for PegRuleName {
@@ -61,6 +61,7 @@ pub enum PegExpression {
     LiteralRange(char, char),
     Rule(PegRuleName),
     Seq(Box<PegExpression>, Box<PegExpression>),
+    Choice(Box<PegExpression>, Box<PegExpression>),
     Repetition(Box<PegExpression>, u32, Option<u32>),
     Predicate(Box<PegExpression>, bool),
     Anything,
@@ -82,6 +83,13 @@ impl PegExpression {
 
     pub fn seq(left: impl Into<Box<PegExpression>>, right: impl Into<Box<PegExpression>>) -> Self {
         Self::Seq(left.into(), right.into())
+    }
+
+    pub fn choice(
+        left: impl Into<Box<PegExpression>>,
+        right: impl Into<Box<PegExpression>>,
+    ) -> Self {
+        Self::Choice(left.into(), right.into())
     }
 
     pub fn zero_or_more(expr: PegExpression) -> Self {
@@ -130,6 +138,7 @@ impl PegExpression {
             Self::LiteralKeyword(_)
             | Self::LiteralRange(_, _)
             | Self::Rule(_)
+            | Self::Choice(_, _)
             | Self::Anything
             | Self::Nothing => self,
             Self::Seq(l, r) => {
