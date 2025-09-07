@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 pub mod dsl;
 mod fmt;
+pub mod visit;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegGrammar {
@@ -217,9 +218,9 @@ value:
         setup_rules!(grammar; root, sum, value);
 
         root += &sum;
-        sum += EPS + &value + (EPS + "+" + &value).star();
-        value += (EPS + ('0'..='9')).plus();
-        value += EPS + "(" + &sum + ")";
+        sum += EPS - &value - (EPS - "+" - &value).star();
+        value += (EPS - ('0'..='9')).plus();
+        value += EPS - "(" - &sum - ")";
 
         let grammar = grammar.build();
 

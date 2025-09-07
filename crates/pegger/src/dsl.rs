@@ -1,15 +1,21 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ops::{Add, AddAssign, RangeInclusive},
+    ops::{Add, AddAssign, RangeInclusive, Sub},
 };
 
-use crate::{PegExpression, PegGrammar, PegRule};
+use crate::{
+    visit::{visit_peg_rule, PegExpressionVisitor},
+    PegExpression, PegGrammar, PegRule, PegRuleName,
+};
+
+const DSL_TRIVIA_RULE_PLACEHOLDER: &str = "@@trivia@@";
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
     names: Vec<&'static str>,
     rules: HashMap<&'static str, RefCell<Vec<PegExpression>>>,
+    trivia_rule_name: Option<PegRuleName>,
 }
 
 impl PegGrammarBuilder {
@@ -44,9 +50,13 @@ impl PegGrammarBuilder {
         self.rules[name].borrow_mut().push(expr.simplify());
     }
 
+    pub fn set_trivia_rule_name(&mut self, name: &'static str) {
+        self.trivia_rule_name = Some(PegRuleName(name));
+    }
+
     pub fn build(mut self) -> PegGrammar {
         assert_eq!(self.names.len(), self.rules.len());
-        let rules = self
+        let mut rules = self
             .names
             .into_iter()
             .map(|name| {
@@ -55,6 +65,32 @@ impl PegGrammarBuilder {
             })
             .map(|(name, choices)| PegRule::multi(name, choices.into_inner()))
             .collect::<Vec<_>>();
+
+        if let Some(trivia_rule) = self.trivia_rule_name {
+            // Some trivia rule was provided, replace all occurences of the placeholder one.
+
+            struct TriviaReplacer {
+                replace_with: PegRuleName,
+            }
+            impl PegExpressionVisitor for TriviaReplacer {
+                fn visit_rule(&mut self, name: &mut PegRuleName) {
+                    if name.0 == DSL_TRIVIA_RULE_PLACEHOLDER {
+                        *name = self.replace_with;
+                    }
+                }
+            }
+            for r in &mut rules {
+                visit_peg_rule(
+                    r,
+                    &mut TriviaReplacer {
+                        replace_with: trivia_rule,
+                    },
+                );
+            }
+        } else {
+            // If no trivia rule was specified, assume there is no trivia in this grammar.
+        }
+
         PegGrammar::new(rules).unwrap()
     }
 }
@@ -90,17 +126,15 @@ pub struct PegExpressionBuilder {
 
 impl PegExpressionBuilder {
     pub fn star(self) -> Self {
-        let Self { expr } = self;
-        Self {
-            expr: PegExpression::zero_or_more(expr),
-        }
+        star(self)
     }
 
     pub fn plus(self) -> Self {
-        let Self { expr } = self;
-        Self {
-            expr: PegExpression::one_or_more(expr),
-        }
+        plus(self)
+    }
+
+    pub fn opt(self) -> Self {
+        opt(self)
     }
 }
 
@@ -120,7 +154,7 @@ impl From<&PegGrammarRuleBuilder<'_>> for PegExpressionBuilder {
     }
 }
 
-/// Convert literal strings to keywords
+/// Convert literal strings to keywords.
 impl From<&'static str> for PegExpressionBuilder {
     fn from(value: &'static str) -> Self {
         Self {
@@ -129,7 +163,7 @@ impl From<&'static str> for PegExpressionBuilder {
     }
 }
 
-/// Convert inclusive ranges to character groups
+/// Convert inclusive ranges to character groups.
 impl From<RangeInclusive<char>> for PegExpressionBuilder {
     fn from(value: RangeInclusive<char>) -> Self {
         Self {
@@ -138,22 +172,92 @@ impl From<RangeInclusive<char>> for PegExpressionBuilder {
     }
 }
 
-/// Overload add operator to sequence operator
+/// Overload add operator to seq operator with trivia.
 impl<R: Into<PegExpressionBuilder>> Add<R> for PegExpressionBuilder {
     type Output = Self;
     fn add(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(
+                PegExpression::seq(
+                    self.expr,
+                    PegExpression::optional(PegExpression::rule(DSL_TRIVIA_RULE_PLACEHOLDER)),
+                ),
+                rhs.into().expr,
+            ),
+        }
+    }
+}
+
+/// Overload add operator to seq operator without trivia.
+impl<R: Into<PegExpressionBuilder>> Sub<R> for PegExpressionBuilder {
+    type Output = Self;
+    fn sub(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
             expr: PegExpression::seq(self.expr, rhs.into().expr),
         }
     }
 }
 
+/// Overload add for strings to seq operator.
+impl Add<PegExpressionBuilder> for &'static str {
+    type Output = PegExpressionBuilder;
+    fn add(self, rhs: PegExpressionBuilder) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(
+                PegExpression::seq(
+                    PegExpression::keyword(self),
+                    PegExpression::optional(PegExpression::rule(DSL_TRIVIA_RULE_PLACEHOLDER)),
+                ),
+                rhs.expr,
+            ),
+        }
+    }
+}
+impl Sub<PegExpressionBuilder> for &'static str {
+    type Output = PegExpressionBuilder;
+    fn sub(self, rhs: PegExpressionBuilder) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(PegExpression::keyword(self), rhs.expr),
+        }
+    }
+}
+
 // Builtin literals.
 
-/// Matches nothing, useful for
+/// Matches nothing without consuming.
 pub const EPS: PegExpressionBuilder = PegExpressionBuilder {
     expr: PegExpression::Nothing,
 };
+
+/// Matches anything.
+pub const ANY: PegExpressionBuilder = PegExpressionBuilder {
+    expr: PegExpression::Anything,
+};
+
+/// Matches the end of file, shortcut for `!.`, a negative lookahead for anything.
+pub fn eof() -> PegExpressionBuilder {
+    PegExpressionBuilder {
+        expr: PegExpression::not_predicate(ANY.expr),
+    }
+}
+
+pub fn star(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+    PegExpressionBuilder {
+        expr: PegExpression::zero_or_more(expr.into().expr),
+    }
+}
+
+pub fn plus(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+    PegExpressionBuilder {
+        expr: PegExpression::one_or_more(expr.into().expr),
+    }
+}
+
+pub fn opt(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+    PegExpressionBuilder {
+        expr: PegExpression::optional(expr.into().expr),
+    }
+}
 
 pub fn and(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
     PegExpressionBuilder {
