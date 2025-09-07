@@ -41,13 +41,31 @@ impl Display for PegExpression {
             Self::Rule(nt) => write!(f, "{}", nt),
             Self::Seq(l, r) => write!(f, "{l} {r}"),
             Self::Choice(l, r) => write!(f, "{l} / {r}"),
-            Self::Repetition(e, 0, None) => write!(f, "({e})*"),
-            Self::Repetition(e, 1, None) => write!(f, "({e})+"),
-            Self::Repetition(e, 0, Some(1)) => write!(f, "({e})?"),
-            Self::Repetition(e, min, None) => write!(f, "({e})[{min}:]"),
-            Self::Repetition(e, min, Some(max)) => write!(f, "({e})[{min}:{max}]"),
-            Self::Predicate(e, true) => write!(f, "&({e})"),
-            Self::Predicate(e, false) => write!(f, "!({e})"),
+            Self::Repetition(e, min, max) => {
+                match e.is_atomic() {
+                    true => write!(f, "{e}")?,
+                    false => write!(f, "({e})")?,
+                }
+                match (min, max) {
+                    (0, None) => write!(f, "*")?,
+                    (1, None) => write!(f, "+")?,
+                    (0, Some(1)) => write!(f, "?")?,
+                    (min, None) => write!(f, "[{min}:]")?,
+                    (min, Some(max)) => write!(f, "[{min}:{max}]")?,
+                }
+                Ok(())
+            }
+            Self::Predicate(e, positive) => {
+                match positive {
+                    true => write!(f, "&")?,
+                    false => write!(f, "!")?,
+                }
+                match e.is_atomic() {
+                    true => write!(f, "{e}")?,
+                    false => write!(f, "({e})")?,
+                }
+                Ok(())
+            }
             Self::Anything => write!(f, "."),
             Self::Nothing => write!(f, "ε"),
         }

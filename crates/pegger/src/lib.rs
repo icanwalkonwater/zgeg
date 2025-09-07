@@ -133,6 +133,13 @@ impl PegExpression {
         matches!(self, Self::Nothing)
     }
 
+    pub fn is_atomic(&self) -> bool {
+        match self {
+            Self::Seq(_, _) | Self::Choice(_, _) => false,
+            _ => true,
+        }
+    }
+
     pub fn simplify(self) -> Self {
         match self {
             // These are not simplifyable
@@ -201,7 +208,7 @@ sum:
   | value ("+" value)*
 
 value:
-  | ([0-9])+
+  | [0-9]+
   | "(" sum ")"
 "#;
 
