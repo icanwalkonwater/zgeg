@@ -13,14 +13,15 @@ const DSL_TRIVIA_RULE_PLACEHOLDER: &str = "@@trivia@@";
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
-    names: Vec<&'static str>,
-    rules: HashMap<&'static str, RefCell<Vec<PegExpression>>>,
+    names: Vec<PegRuleName>,
+    rules: HashMap<PegRuleName, RefCell<Vec<PegExpression>>>,
     trivia_rule_name: Option<PegRuleName>,
 }
 
 impl PegGrammarBuilder {
     /// You probably want to use `rules()`.
     pub fn rule<'a>(&'a mut self, name: &'static str) -> PegGrammarRuleBuilder<'a> {
+        let name = PegRuleName(name);
         let prev = self.rules.insert(name, RefCell::new(vec![]));
         assert!(prev.is_none());
         self.names.push(name);
@@ -35,6 +36,8 @@ impl PegGrammarBuilder {
         &mut self,
         names: [&'static str; N],
     ) -> [PegGrammarRuleBuilder; N] {
+        let names = names.map(PegRuleName);
+
         for n in names {
             let prev = self.rules.insert(n, RefCell::new(Vec::new()));
             assert!(prev.is_none());
@@ -46,8 +49,8 @@ impl PegGrammarBuilder {
         })
     }
 
-    fn append_to_rule(&self, name: &'static str, expr: PegExpression) {
-        self.rules[name].borrow_mut().push(expr.simplify());
+    fn append_to_rule(&self, name: PegRuleName, expr: PegExpression) {
+        self.rules[&name].borrow_mut().push(expr.simplify());
     }
 
     pub fn set_trivia_rule_name(&mut self, name: &'static str) {
@@ -60,10 +63,10 @@ impl PegGrammarBuilder {
             .names
             .into_iter()
             .map(|name| {
-                let v = self.rules.remove(name).unwrap();
+                let v = self.rules.remove(&name).unwrap();
                 (name, v)
             })
-            .map(|(name, choices)| PegRule::multi(name, choices.into_inner()))
+            .map(|(name, choices)| PegRule::multi(name.0, choices.into_inner()))
             .collect::<Vec<_>>();
 
         if let Some(trivia_rule) = self.trivia_rule_name {
@@ -117,7 +120,7 @@ pub use setup_rules;
 
 pub struct PegGrammarRuleBuilder<'a> {
     builder: &'a PegGrammarBuilder,
-    name: &'static str,
+    name: PegRuleName,
 }
 
 pub struct PegExpressionBuilder {
@@ -149,7 +152,7 @@ impl<T: Into<PegExpressionBuilder>> AddAssign<T> for PegGrammarRuleBuilder<'_> {
 impl From<&PegGrammarRuleBuilder<'_>> for PegExpressionBuilder {
     fn from(value: &PegGrammarRuleBuilder) -> Self {
         Self {
-            expr: PegExpression::rule(value.name),
+            expr: PegExpression::Rule(value.name),
         }
     }
 }
