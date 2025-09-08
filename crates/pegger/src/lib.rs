@@ -58,24 +58,39 @@ impl PegRule {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PegExpression {
-    LiteralKeyword(&'static str),
-    LiteralRange(char, char),
+    LiteralExact(&'static str),
+    LiteralRange {
+        from: char,
+        to: char,
+    },
+    LiteralClass(PegLiteralCharacterClass),
     Rule(PegRuleName),
     Seq(Box<PegExpression>, Box<PegExpression>),
     Choice(Box<PegExpression>, Box<PegExpression>),
-    Repetition(Box<PegExpression>, u32, Option<u32>),
-    Predicate(Box<PegExpression>, bool),
+    Repetition {
+        expr: Box<PegExpression>,
+        min: u32,
+        max: Option<u32>,
+    },
+    Predicate {
+        expr: Box<PegExpression>,
+        positive: bool,
+    },
     Anything,
     Nothing,
 }
 
 impl PegExpression {
-    pub fn keyword(kw: &'static str) -> Self {
-        Self::LiteralKeyword(kw)
+    pub fn exact(kw: &'static str) -> Self {
+        Self::LiteralExact(kw)
     }
 
     pub fn range(from: char, to: char) -> Self {
-        Self::LiteralRange(from, to)
+        Self::LiteralRange { from, to }
+    }
+
+    pub fn class(class: PegLiteralCharacterClass) -> Self {
+        Self::LiteralClass(class)
     }
 
     pub fn rule(name: &'static str) -> Self {
@@ -94,19 +109,35 @@ impl PegExpression {
     }
 
     pub fn zero_or_more(expr: PegExpression) -> Self {
-        Self::Repetition(Box::new(expr), 0, None)
+        Self::Repetition {
+            expr: Box::new(expr),
+            min: 0,
+            max: None,
+        }
     }
 
     pub fn one_or_more(expr: PegExpression) -> Self {
-        Self::Repetition(Box::new(expr), 1, None)
+        Self::Repetition {
+            expr: Box::new(expr),
+            min: 1,
+            max: None,
+        }
     }
 
     pub fn optional(expr: PegExpression) -> Self {
-        Self::Repetition(Box::new(expr), 0, Some(1))
+        Self::Repetition {
+            expr: Box::new(expr),
+            min: 0,
+            max: Some(1),
+        }
     }
 
     pub fn repetition(expr: PegExpression, min: u32, max: Option<u32>) -> Self {
-        Self::Repetition(Box::new(expr), min, max)
+        Self::Repetition {
+            expr: Box::new(expr),
+            min,
+            max,
+        }
     }
 
     pub fn and_predicate(pred: impl Into<Box<PegExpression>>) -> Self {
@@ -118,7 +149,10 @@ impl PegExpression {
     }
 
     pub fn predicate(pred: impl Into<Box<PegExpression>>, positive: bool) -> Self {
-        Self::Predicate(pred.into(), positive)
+        Self::Predicate {
+            expr: pred.into(),
+            positive,
+        }
     }
 
     pub fn anything() -> Self {
@@ -143,10 +177,10 @@ impl PegExpression {
     pub fn simplify(self) -> Self {
         match self {
             // These are not simplifyable
-            Self::LiteralKeyword(_)
-            | Self::LiteralRange(_, _)
+            Self::LiteralExact(_)
+            | Self::LiteralRange { from: _, to: _ }
+            | Self::LiteralClass(_)
             | Self::Rule(_)
-            | Self::Choice(_, _)
             | Self::Anything
             | Self::Nothing => self,
             Self::Seq(l, r) => {
@@ -157,10 +191,25 @@ impl PegExpression {
                     (l, r) => Self::seq(l, r),
                 }
             }
-            Self::Repetition(expr, min, max) => Self::repetition(expr.simplify(), min, max),
-            Self::Predicate(pred, positive) => Self::predicate(pred.simplify(), positive),
+            Self::Choice(l, r) => Self::choice(l.simplify(), r.simplify()),
+            Self::Repetition { expr, min, max } => Self::repetition(expr.simplify(), min, max),
+            Self::Predicate {
+                expr: pred,
+                positive,
+            } => Self::predicate(pred.simplify(), positive),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PegLiteralCharacterClass {
+    Ascii,
+    Alphabetic,
+    Numeric,
+    Alphanumeric,
+    Whitespace,
+    XidStart,
+    XidContinue,
 }
 
 #[cfg(test)]
@@ -176,7 +225,7 @@ mod tests {
                 PegExpression::seq(
                     PegExpression::rule("value"),
                     PegExpression::zero_or_more(PegExpression::seq(
-                        PegExpression::LiteralKeyword("+"),
+                        PegExpression::LiteralExact("+"),
                         PegExpression::rule("value"),
                     )),
                 ),
@@ -184,13 +233,13 @@ mod tests {
             PegRule::multi(
                 "value",
                 [
-                    PegExpression::one_or_more(PegExpression::LiteralRange('0', '9')),
+                    PegExpression::one_or_more(PegExpression::LiteralRange { from: '0', to: '9' }),
                     PegExpression::seq(
                         PegExpression::seq(
-                            PegExpression::LiteralKeyword("("),
+                            PegExpression::LiteralExact("("),
                             PegExpression::rule("sum"),
                         ),
-                        PegExpression::keyword(")"),
+                        PegExpression::exact(")"),
                     ),
                 ],
             ),
@@ -226,7 +275,7 @@ value:
 
         root += &sum;
         sum += eps() + &value + (eps() + "+" + &value).star();
-        value += (eps() + ('0'..='9')).plus();
+        value += (eps() + ['0', '9']).plus();
         value += eps() + "(" + &sum + ")";
 
         let grammar = grammar.build();

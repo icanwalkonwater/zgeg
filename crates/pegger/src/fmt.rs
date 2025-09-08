@@ -24,24 +24,25 @@ impl Display for PegRule {
 impl Display for PegExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::LiteralKeyword(r) => {
+            Self::LiteralExact(r) => {
                 write!(f, "\"")?;
                 for c in r.chars() {
                     write_char_escaped(f, c)?;
                 }
                 write!(f, "\"")
             }
-            Self::LiteralRange(from, to) => {
+            Self::LiteralRange { from, to } => {
                 write!(f, "[")?;
                 write_char_escaped(f, *from)?;
                 write!(f, "-")?;
                 write_char_escaped(f, *to)?;
                 write!(f, "]")
             }
+            Self::LiteralClass(cls) => write!(f, "[:{cls:?}:]"),
             Self::Rule(nt) => write!(f, "{}", nt),
             Self::Seq(l, r) => write!(f, "{l} {r}"),
-            Self::Choice(l, r) => write!(f, "{l} / {r}"),
-            Self::Repetition(e, min, max) => {
+            Self::Choice(l, r) => write!(f, "({l} / {r})"),
+            Self::Repetition { expr: e, min, max } => {
                 match e.is_atomic() {
                     true => write!(f, "{e}")?,
                     false => write!(f, "({e})")?,
@@ -55,7 +56,7 @@ impl Display for PegExpression {
                 }
                 Ok(())
             }
-            Self::Predicate(e, positive) => {
+            Self::Predicate { expr: e, positive } => {
                 match positive {
                     true => write!(f, "&")?,
                     false => write!(f, "!")?,

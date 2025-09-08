@@ -1,10 +1,10 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    ops::{Add, AddAssign, RangeInclusive},
+    ops::{Add, AddAssign, BitOr},
 };
 
-use crate::{visit::PegExpressionVisitor, PegExpression, PegGrammar, PegRule, PegRuleName};
+use crate::{PegExpression, PegGrammar, PegLiteralCharacterClass, PegRule, PegRuleName};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
@@ -72,7 +72,7 @@ impl PegGrammarBuilder {
 /// setup_rules!(g; root, sum, value);
 ///
 /// root += &sum;
-/// value += eps() + ('0'..='9');
+/// value += eps() + ['0', '9'];
 /// // ...
 /// ```
 #[macro_export]
@@ -106,61 +106,162 @@ impl PegExpressionBuilder {
     }
 }
 
-/// Append anything that can be turnedinto an expression to the grammar rule.
-impl<T: Into<PegExpressionBuilder>> AddAssign<T> for PegGrammarRuleBuilder<'_> {
+// == DSL operators
+//
+// Those types can be converted to expressions:
+// - `&'static str` as exact.
+// - `&PegGrammarRuleBuilder` as rule.
+// - `[char, char]` as range.
+//
+// Operators:
+// - `+=` to add an alternative to a rule.
+// - `+` for sequence.
+// - `|` for choice.
+
+pub trait CoercableToPegExpression {
+    fn into_expr(self) -> PegExpressionBuilder;
+}
+
+impl CoercableToPegExpression for &PegGrammarRuleBuilder<'_> {
+    fn into_expr(self) -> PegExpressionBuilder {
+        PegExpressionBuilder {
+            expr: PegExpression::Rule(self.name),
+        }
+    }
+}
+impl CoercableToPegExpression for PegExpressionBuilder {
+    fn into_expr(self) -> PegExpressionBuilder {
+        self
+    }
+}
+impl CoercableToPegExpression for PegLiteralCharacterClass {
+    fn into_expr(self) -> PegExpressionBuilder {
+        PegExpressionBuilder {
+            expr: PegExpression::LiteralClass(self),
+        }
+    }
+}
+impl CoercableToPegExpression for &'static str {
+    fn into_expr(self) -> PegExpressionBuilder {
+        PegExpressionBuilder {
+            expr: PegExpression::exact(self),
+        }
+    }
+}
+impl CoercableToPegExpression for [char; 2] {
+    fn into_expr(self) -> PegExpressionBuilder {
+        PegExpressionBuilder {
+            expr: PegExpression::range(self[0], self[1]),
+        }
+    }
+}
+
+/// Append anything that can be turned into an expression to the grammar rule.
+impl<T: CoercableToPegExpression> AddAssign<T> for PegGrammarRuleBuilder<'_> {
     fn add_assign(&mut self, rhs: T) {
-        self.builder.append_to_rule(self.name, rhs.into().expr);
+        self.builder.append_to_rule(self.name, rhs.into_expr().expr);
     }
 }
 
-/// Convert rule builder into a rule expression.
-impl From<&PegGrammarRuleBuilder<'_>> for PegExpressionBuilder {
-    fn from(value: &PegGrammarRuleBuilder) -> Self {
-        Self {
-            expr: PegExpression::Rule(value.name),
-        }
-    }
-}
+// Operators for expression builder.
 
-/// Convert literal strings to keywords.
-impl From<&'static str> for PegExpressionBuilder {
-    fn from(value: &'static str) -> Self {
-        Self {
-            expr: PegExpression::keyword(value),
-        }
-    }
-}
-
-/// Convert inclusive ranges to character groups.
-impl From<RangeInclusive<char>> for PegExpressionBuilder {
-    fn from(value: RangeInclusive<char>) -> Self {
-        Self {
-            expr: PegExpression::range(*value.start(), *value.end()),
-        }
-    }
-}
-
-/// Overload add operator to seq operator.
-impl<R: Into<PegExpressionBuilder>> Add<R> for PegExpressionBuilder {
-    type Output = Self;
+impl<R: CoercableToPegExpression> Add<R> for PegExpressionBuilder {
+    type Output = PegExpressionBuilder;
     fn add(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::seq(self.expr, rhs.into().expr),
+            expr: PegExpression::seq(self.expr, rhs.into_expr().expr),
+        }
+    }
+}
+impl<R: CoercableToPegExpression> BitOr<R> for PegExpressionBuilder {
+    type Output = PegExpressionBuilder;
+    fn bitor(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::choice(self.expr, rhs.into_expr().expr),
         }
     }
 }
 
-/// Overload add for strings to seq operator.
+// Operators for rule builder.
+
+impl<R: CoercableToPegExpression> Add<R> for &PegGrammarRuleBuilder<'_> {
+    type Output = PegExpressionBuilder;
+    fn add(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(PegExpression::Rule(self.name), rhs.into_expr().expr),
+        }
+    }
+}
+impl<R: CoercableToPegExpression> BitOr<R> for &PegGrammarRuleBuilder<'_> {
+    type Output = PegExpressionBuilder;
+    fn bitor(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::choice(PegExpression::Rule(self.name), rhs.into_expr().expr),
+        }
+    }
+}
+
+// Operators for character class.
+
+impl<R: CoercableToPegExpression> Add<R> for PegLiteralCharacterClass {
+    type Output = PegExpressionBuilder;
+    fn add(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(PegExpression::class(self), rhs.into_expr().expr),
+        }
+    }
+}
+impl<R: CoercableToPegExpression> BitOr<R> for PegLiteralCharacterClass {
+    type Output = PegExpressionBuilder;
+    fn bitor(self, rhs: R) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::choice(PegExpression::class(self), rhs.into_expr().expr),
+        }
+    }
+}
+
+// Operators for &'static str.
+
 impl Add<PegExpressionBuilder> for &'static str {
     type Output = PegExpressionBuilder;
     fn add(self, rhs: PegExpressionBuilder) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::keyword(self), rhs.expr),
+            expr: PegExpression::seq(PegExpression::exact(self), rhs.expr),
+        }
+    }
+}
+impl BitOr<PegExpressionBuilder> for &'static str {
+    type Output = PegExpressionBuilder;
+    fn bitor(self, rhs: PegExpressionBuilder) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::choice(PegExpression::exact(self), rhs.expr),
         }
     }
 }
 
-// Builtin literals.
+// Operators for [char; 2].
+
+impl Add<PegExpressionBuilder> for [char; 2] {
+    type Output = PegExpressionBuilder;
+    fn add(self, rhs: PegExpressionBuilder) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::seq(PegExpression::range(self[0], self[1]), rhs.expr),
+        }
+    }
+}
+impl BitOr<PegExpressionBuilder> for [char; 2] {
+    type Output = PegExpressionBuilder;
+    fn bitor(self, rhs: PegExpressionBuilder) -> Self::Output {
+        PegExpressionBuilder {
+            expr: PegExpression::choice(PegExpression::range(self[0], self[1]), rhs.expr),
+        }
+    }
+}
+
+// Helpers for common expressions.
+
+// Expose character classes
+pub use PegLiteralCharacterClass::*;
 
 /// Matches nothing without consuming.
 pub fn eps() -> PegExpressionBuilder {
@@ -176,32 +277,32 @@ pub fn any() -> PegExpressionBuilder {
     }
 }
 
-pub fn star(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+pub fn star(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::zero_or_more(expr.into().expr),
+        expr: PegExpression::zero_or_more(expr.into_expr().expr),
     }
 }
 
-pub fn plus(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+pub fn plus(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::one_or_more(expr.into().expr),
+        expr: PegExpression::one_or_more(expr.into_expr().expr),
     }
 }
 
-pub fn opt(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+pub fn opt(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::optional(expr.into().expr),
+        expr: PegExpression::optional(expr.into_expr().expr),
     }
 }
 
-pub fn and(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+pub fn and(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::and_predicate(expr.into().expr),
+        expr: PegExpression::and_predicate(expr.into_expr().expr),
     }
 }
 
-pub fn not(expr: impl Into<PegExpressionBuilder>) -> PegExpressionBuilder {
+pub fn not(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::not_predicate(expr.into().expr),
+        expr: PegExpression::not_predicate(expr.into_expr().expr),
     }
 }

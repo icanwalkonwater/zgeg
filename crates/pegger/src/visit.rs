@@ -1,9 +1,10 @@
-use crate::{PegExpression, PegRule, PegRuleName};
+use crate::{PegExpression, PegLiteralCharacterClass, PegRule, PegRuleName};
 
 #[allow(unused_variables)]
 pub trait PegExpressionVisitor {
     fn visit_literal_keyword(&mut self, keyword: &mut &'static str) {}
     fn visit_literal_range(&mut self, from: &mut char, to: &mut char) {}
+    fn visit_literal_class(&mut self, class: &mut PegLiteralCharacterClass) {}
     fn visit_rule(&mut self, name: &mut PegRuleName) {}
     fn visit_seq(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}
     fn visit_choice(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}
@@ -17,8 +18,9 @@ pub trait PegExpressionVisitor {
 pub fn visit_peg_expression(expr: &mut PegExpression, visitor: &mut impl PegExpressionVisitor) {
     use PegExpression::*;
     match expr {
-        LiteralKeyword(keyword) => visitor.visit_literal_keyword(keyword),
-        LiteralRange(from, to) => visitor.visit_literal_range(from, to),
+        LiteralExact(keyword) => visitor.visit_literal_keyword(keyword),
+        LiteralRange { from, to } => visitor.visit_literal_range(from, to),
+        LiteralClass(class) => visitor.visit_literal_class(class),
         Rule(name) => visitor.visit_rule(name),
         Seq(left, right) => {
             visitor.visit_seq(left, right);
@@ -30,11 +32,14 @@ pub fn visit_peg_expression(expr: &mut PegExpression, visitor: &mut impl PegExpr
             visit_peg_expression(left, visitor);
             visit_peg_expression(right, visitor);
         }
-        Repetition(expr, min, max) => {
+        Repetition { expr, min, max } => {
             visitor.visit_repetition(expr, min, max);
             visit_peg_expression(expr, visitor);
         }
-        Predicate(pred, positive) => {
+        Predicate {
+            expr: pred,
+            positive,
+        } => {
             visitor.visit_predicate(pred, positive);
             visit_peg_expression(pred, visitor);
         }
