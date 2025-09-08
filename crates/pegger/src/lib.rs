@@ -225,9 +225,9 @@ value:
         setup_rules!(grammar; root, sum, value);
 
         root += &sum;
-        sum += EPS - &value - (EPS - "+" - &value).star();
-        value += (EPS - ('0'..='9')).plus();
-        value += EPS - "(" - &sum - ")";
+        sum += eps() + &value + (eps() + "+" + &value).star();
+        value += (eps() + ('0'..='9')).plus();
+        value += eps() + "(" + &sum + ")";
 
         let grammar = grammar.build();
 
