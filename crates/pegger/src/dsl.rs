@@ -220,43 +220,31 @@ impl<R: CoercableToPegExpression> BitOr<R> for PegLiteralCharacterClass {
     }
 }
 
-// Operators for &'static str.
+// Helper to impl many operators on external types
+macro_rules! impl_binop_for_external {
+    (impl $op_ty:ident<$rhs:ty> for $lhs:ty, $op_fn:ident, $expr_new:ident) => {
+        impl $op_ty<$rhs> for $lhs {
+            type Output = PegExpressionBuilder;
+            fn $op_fn(self, rhs: $rhs) -> Self::Output {
+                PegExpressionBuilder {
+                    expr: PegExpression::$expr_new(self.into_expr().expr, rhs.into_expr().expr),
+                }
+            }
+        }
+    };
+}
 
-impl Add<PegExpressionBuilder> for &'static str {
-    type Output = PegExpressionBuilder;
-    fn add(self, rhs: PegExpressionBuilder) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::exact(self), rhs.expr),
-        }
-    }
-}
-impl BitOr<PegExpressionBuilder> for &'static str {
-    type Output = PegExpressionBuilder;
-    fn bitor(self, rhs: PegExpressionBuilder) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::choice(PegExpression::exact(self), rhs.expr),
-        }
-    }
-}
+// Operators for &'static str.
+impl_binop_for_external!(impl Add<PegExpressionBuilder> for &'static str, add, seq);
+impl_binop_for_external!(impl Add<&PegGrammarRuleBuilder<'_>> for &'static str, add, seq);
+impl_binop_for_external!(impl BitOr<PegExpressionBuilder> for &'static str, bitor, choice);
+impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for &'static str, bitor, choice);
 
 // Operators for [char; 2].
-
-impl Add<PegExpressionBuilder> for [char; 2] {
-    type Output = PegExpressionBuilder;
-    fn add(self, rhs: PegExpressionBuilder) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::range(self[0], self[1]), rhs.expr),
-        }
-    }
-}
-impl BitOr<PegExpressionBuilder> for [char; 2] {
-    type Output = PegExpressionBuilder;
-    fn bitor(self, rhs: PegExpressionBuilder) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::choice(PegExpression::range(self[0], self[1]), rhs.expr),
-        }
-    }
-}
+impl_binop_for_external!(impl Add<PegExpressionBuilder> for [char; 2], add, seq);
+impl_binop_for_external!(impl Add<&PegGrammarRuleBuilder<'_>> for [char; 2], add, seq);
+impl_binop_for_external!(impl BitOr<PegExpressionBuilder> for [char; 2], bitor, choice);
+impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for [char; 2], bitor, choice);
 
 // Helpers for common expressions.
 
