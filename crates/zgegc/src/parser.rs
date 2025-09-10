@@ -5,56 +5,98 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     use pegger::dsl::*;
 
     let mut g = PegGrammarBuilder::default();
-    g.set_trivia_rule_name("TRIVIA");
     setup_rules!(g;
-        source_file,
-        item, item_function,
+        File, Item,
+        ItemFunction,
+        Block, Statement,
+        Expr, ExprAtom,
+        ExprInfixOp, ExprPrefixOp, ExprPostfixOp,
 
-        argument_list,
+        // Tokens
 
-        block, instruction,
-        expression,
-        function_call,
-
-        ty,
-
-        ident, ident_prefix, ident_body,
-        whitespace, EOL,
-        TRIVIA,
+        Ident,
+        Number, INTEGER, FLOATING,
+        String,
+        Comment, Trivia,
+        EOF, EOL,
+        SEMICOLON,
+        PLUS, PLUSPLUS, HYPHEN, HYPHENHYPHEN, STAR, STARSTAR, SLASH_F,
+        QUOTE_S, QUOTE_D,
+        PAREN_L, PAREN_R,
+        BRACES_L, BRACES_R,
+        EOKW, KW,
+        KW_fun,
     );
 
-    source_file += star(EPS + &item) + eof();
-    item += &item_function;
+    File += &Trivia + star(&Item) + &EOF;
 
-    item_function += EPS - "fun" - &TRIVIA - &ident + "(" + ")" + &block;
+    Item += &ItemFunction;
 
-    block += EPS - "{" - star(EPS + &instruction) + "}";
-    instruction += EPS - &expression + ";";
+    ItemFunction += &KW_fun + &Ident + &PAREN_L + &PAREN_R + &Block;
 
-    expression += EPS - &function_call;
+    Block += &BRACES_L + star(&Statement) + &BRACES_R;
 
-    function_call += EPS - &ident + "(" + ")";
+    Statement += &Expr + &SEMICOLON;
 
-    ty += &ident;
+    Expr += opt(&ExprPrefixOp) + &ExprAtom + opt(&ExprPostfixOp) + opt(&ExprInfixOp + &Expr);
+    ExprAtom += &PAREN_L + &Expr + &PAREN_R;
+    ExprAtom += &Number;
+    ExprAtom += &String;
 
-    ident += EPS - &ident_prefix - star(&ident_body);
-    // Ident don't start with numbers.
-    ident_prefix += not('0'..='9') - &ident_body;
-    ident_body += "_";
-    ident_body += 'a'..='z';
-    ident_body += 'A'..='Z';
-    ident_body += '0'..='9';
+    ExprInfixOp += &PLUS;
+    ExprInfixOp += &HYPHEN;
+    ExprInfixOp += &STAR;
+    ExprInfixOp += &SLASH_F;
+    ExprPrefixOp += &PLUS;
+    ExprPrefixOp += &HYPHEN;
 
-    whitespace += " ";
-    whitespace += '\x09'..='\x0d';
-    EOL += "\r\n";
+    // Tokens.
+    // They also eat up any trivia right after them.
+
+    Ident += not(&KW) + (XidStart | "_") + star(XidContinue) + &Trivia;
+
+    Number += &INTEGER;
+    Number += &FLOATING;
+
+    INTEGER += plus(['0', '9']) + not(Alphanumeric) + &Trivia;
+    FLOATING += plus(['0', '9'])
+        + "."
+        + star(['0', '9'])
+        + (eps() + "f" | "F")
+        + not(Alphanumeric)
+        + &Trivia;
+
+    String += &QUOTE_S + star(not(&QUOTE_S) + not(&EOL) + any()) + &QUOTE_S;
+    String += &QUOTE_D + star(not(&QUOTE_D) + not(&EOL) + any()) + &QUOTE_D;
+
+    Comment += "//" + star(not(&EOL) + any()) + &EOL;
+    Trivia += star(Whitespace | &Comment);
+
+    EOF += not(any());
     EOL += "\n";
+    EOL += "\r\n";
     EOL += "\r";
+    EOL += &EOF;
 
-    TRIVIA += (EPS - &whitespace).plus() - opt(&TRIVIA);
-    // EOL is optional because it can be the end of file.
-    TRIVIA += "//" - (not(&EOL) - ANY).star() - opt(&EOL) - opt(&TRIVIA);
-    TRIVIA += "/*" - (not("*/") - ANY).star() - "*/" - opt(&TRIVIA);
+    SEMICOLON += ";" + &Trivia;
+    PLUS += "+" + not("+") + &Trivia;
+    PLUSPLUS += "++" + &Trivia;
+    HYPHEN += "-" + not("-") + &Trivia;
+    HYPHENHYPHEN += "--" + &Trivia;
+    STAR += "*" + not("*") + &Trivia;
+    STARSTAR += "**" + &Trivia;
+    QUOTE_S += "'" + &Trivia;
+    QUOTE_D += "\"" + &Trivia;
+    SLASH_F += "/" + not("/") + &Trivia;
+    PAREN_L += "(" + &Trivia;
+    PAREN_R += ")" + &Trivia;
+    BRACES_L += "{" + &Trivia;
+    BRACES_R += "}" + &Trivia;
+
+    // End-of-keyword, helper to avoid issues like "funhello" being matched by `"fun" ident`
+    EOKW += not(Alphanumeric | "_") + &Trivia;
+    KW += &KW_fun;
+    KW_fun += "fun" + &EOKW;
 
     g.build()
 }
