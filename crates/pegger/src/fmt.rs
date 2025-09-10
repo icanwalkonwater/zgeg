@@ -6,6 +6,7 @@ impl Display for PegGrammar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for n in &self.rules {
             writeln!(f, "{}", n)?;
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -13,9 +14,16 @@ impl Display for PegGrammar {
 
 impl Display for PegRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}:", self.name)?;
-        for choice in &self.choices {
-            writeln!(f, "  | {choice}")?;
+        write!(f, "{}:", self.name)?;
+        match self.choices.len() {
+            0 => write!(f, " {}", PegExpression::Nothing)?,
+            1 => write!(f, " {}", &self.choices[0])?,
+            _ => {
+                for choice in &self.choices {
+                    writeln!(f)?;
+                    write!(f, "  | {choice}")?;
+                }
+            }
         }
         Ok(())
     }

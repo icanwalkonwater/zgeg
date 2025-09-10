@@ -250,11 +250,9 @@ mod tests {
     #[test]
     fn simple_adder_fmt() {
         let expected = r#"
-root:
-  | sum
+root: sum
 
-sum:
-  | value ("+" value)*
+sum: value ("+" value)*
 
 value:
   | [0-9]+
