@@ -38,6 +38,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
 
     Statement += &Expr + &SEMICOLON;
 
+    // Written to be post processed by a Pratt parser.
     Expr += opt(&ExprPrefixOp) + &ExprAtom + opt(&ExprPostfixOp) + opt(&ExprInfixOp + &Expr);
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
     ExprAtom += &Number;

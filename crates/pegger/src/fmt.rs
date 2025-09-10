@@ -16,7 +16,11 @@ impl Display for PegRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:", self.name)?;
         match self.choices.len() {
-            0 => write!(f, " {}", PegExpression::Nothing)?,
+            0 => write!(
+                f,
+                " {}",
+                PegExpression::not_predicate(PegExpression::Nothing)
+            )?,
             1 => write!(f, " {}", &self.choices[0])?,
             _ => {
                 for choice in &self.choices {
