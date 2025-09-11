@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{PegExpression, PegGrammar, PegRule};
+use crate::{PegCharacterClass, PegExpression, PegGrammar, PegRule};
 
 impl Display for PegGrammar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -50,7 +50,7 @@ impl Display for PegExpression {
                 write_char_escaped(f, *to)?;
                 write!(f, "]")
             }
-            Self::LiteralClass(cls) => write!(f, "[:{cls:?}:]"),
+            Self::LiteralClass(cls) => write!(f, "{cls}"),
             Self::Rule(nt) => write!(f, "{}", nt),
             Self::Seq(l, r) => write!(f, "{l} {r}"),
             Self::Choice(l, r) => write!(f, "({l} / {r})"),
@@ -81,6 +81,25 @@ impl Display for PegExpression {
             }
             Self::Anything => write!(f, "."),
             Self::Nothing => write!(f, "ε"),
+        }
+    }
+}
+
+impl Display for PegCharacterClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UserDefined(classes) => {
+                write!(f, "[")?;
+                for class in classes {
+                    if class[0] == class[1] {
+                        write!(f, "{}", class[0])?;
+                    } else {
+                        write!(f, "{}-{}", class[0], class[1])?;
+                    }
+                }
+                write!(f, "]")
+            }
+            _ => write!(f, "[:{self:?}:]"),
         }
     }
 }

@@ -5,7 +5,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     use pegger::dsl::*;
 
     let mut g = PegGrammarBuilder::default();
-    setup_rules!(g;
+    declare_rules!(g;
         File, Item,
         ItemFunction,
         Block, Statement,

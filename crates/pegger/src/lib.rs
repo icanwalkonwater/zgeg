@@ -63,7 +63,7 @@ pub enum PegExpression {
         from: char,
         to: char,
     },
-    LiteralClass(PegLiteralCharacterClass),
+    LiteralClass(PegCharacterClass),
     Rule(PegRuleName),
     Seq(Box<PegExpression>, Box<PegExpression>),
     Choice(Box<PegExpression>, Box<PegExpression>),
@@ -89,7 +89,7 @@ impl PegExpression {
         Self::LiteralRange { from, to }
     }
 
-    pub fn class(class: PegLiteralCharacterClass) -> Self {
+    pub fn class(class: PegCharacterClass) -> Self {
         Self::LiteralClass(class)
     }
 
@@ -201,15 +201,13 @@ impl PegExpression {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PegLiteralCharacterClass {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PegCharacterClass {
+    UserDefined(Vec<[char; 2]>),
     Ascii,
-    Alphabetic,
-    Numeric,
-    Alphanumeric,
-    Whitespace,
-    XidStart,
-    XidContinue,
+    Utf8Whitespace,
+    Utf8XidStart,
+    Utf8XidContinue,
 }
 
 #[cfg(test)]
@@ -269,7 +267,7 @@ value:
         use crate::dsl::*;
 
         let mut grammar = PegGrammarBuilder::default();
-        setup_rules!(grammar; root, sum, value);
+        declare_rules!(grammar; root, sum, value);
 
         root += &sum;
         sum += eps() + &value + (eps() + "+" + &value).star();

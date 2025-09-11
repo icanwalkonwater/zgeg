@@ -1,10 +1,10 @@
-use crate::{PegExpression, PegLiteralCharacterClass, PegRule, PegRuleName};
+use crate::{PegCharacterClass, PegExpression, PegRule, PegRuleName};
 
 #[allow(unused_variables)]
 pub trait PegExpressionVisitor {
     fn visit_literal_keyword(&mut self, keyword: &mut &'static str) {}
     fn visit_literal_range(&mut self, from: &mut char, to: &mut char) {}
-    fn visit_literal_class(&mut self, class: &mut PegLiteralCharacterClass) {}
+    fn visit_literal_class(&mut self, class: &mut PegCharacterClass) {}
     fn visit_rule(&mut self, name: &mut PegRuleName) {}
     fn visit_seq(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}
     fn visit_choice(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}

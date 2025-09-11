@@ -4,7 +4,7 @@ use std::{
     ops::{Add, AddAssign, BitOr},
 };
 
-use crate::{PegExpression, PegGrammar, PegLiteralCharacterClass, PegRule, PegRuleName};
+use crate::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
@@ -76,12 +76,12 @@ impl PegGrammarBuilder {
 /// // ...
 /// ```
 #[macro_export]
-macro_rules! setup_rules {
+macro_rules! declare_rules {
     ($grammar:expr; $($rule:ident),+ $(,)?) => {
         let [$(mut $rule),+] = $grammar.rules([$(stringify!($rule)),+]);
     };
 }
-pub use setup_rules;
+pub use declare_rules;
 
 pub struct PegGrammarRuleBuilder<'a> {
     builder: &'a PegGrammarBuilder,
@@ -134,7 +134,7 @@ impl CoercableToPegExpression for PegExpressionBuilder {
         self
     }
 }
-impl CoercableToPegExpression for PegLiteralCharacterClass {
+impl CoercableToPegExpression for PegCharacterClass {
     fn into_expr(self) -> PegExpressionBuilder {
         PegExpressionBuilder {
             expr: PegExpression::LiteralClass(self),
@@ -203,7 +203,7 @@ impl<R: CoercableToPegExpression> BitOr<R> for &PegGrammarRuleBuilder<'_> {
 
 // Operators for character class.
 
-impl<R: CoercableToPegExpression> Add<R> for PegLiteralCharacterClass {
+impl<R: CoercableToPegExpression> Add<R> for PegCharacterClass {
     type Output = PegExpressionBuilder;
     fn add(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
@@ -211,7 +211,7 @@ impl<R: CoercableToPegExpression> Add<R> for PegLiteralCharacterClass {
         }
     }
 }
-impl<R: CoercableToPegExpression> BitOr<R> for PegLiteralCharacterClass {
+impl<R: CoercableToPegExpression> BitOr<R> for PegCharacterClass {
     type Output = PegExpressionBuilder;
     fn bitor(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
@@ -249,7 +249,7 @@ impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for [char; 2], b
 // Helpers for common expressions.
 
 // Expose character classes
-pub use PegLiteralCharacterClass::*;
+pub use PegCharacterClass::*;
 
 /// Matches nothing without consuming.
 pub fn eps() -> PegExpressionBuilder {
@@ -292,5 +292,31 @@ pub fn and(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
 pub fn not(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
         expr: PegExpression::not_predicate(expr.into_expr().expr),
+    }
+}
+
+pub fn class(class: &'static str) -> PegExpressionBuilder {
+    let mut iter = class.chars().peekable();
+    let mut classes = Vec::new();
+
+    loop {
+        let Some(c) = iter.next() else {
+            break;
+        };
+        assert_ne!(c, '-');
+
+        if let Some('-') = iter.peek() {
+            // Its a range
+            iter.next().unwrap();
+            let end = iter.next().unwrap();
+            classes.push([c, end]);
+        } else {
+            // Its not a range
+            classes.push([c, c]);
+        }
+    }
+
+    PegExpressionBuilder {
+        expr: PegExpression::class(PegCharacterClass::UserDefined(classes)),
     }
 }
