@@ -11,6 +11,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         Block, Statement,
         Expr, ExprAtom,
         ExprInfixOp, ExprPrefixOp, ExprPostfixOp,
+        FunctionCall,
 
         // Tokens
 
@@ -19,7 +20,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         String,
         Comment, Trivia,
         EOF, EOL,
-        SEMICOLON,
+        DOT, DOTDOT, COMMA, SEMICOLON,
         PLUS, PLUSPLUS, HYPHEN, HYPHENHYPHEN, STAR, STARSTAR, SLASH_F,
         QUOTE_S, QUOTE_D,
         PAREN_L, PAREN_R,
@@ -43,6 +44,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
     ExprAtom += &Number;
     ExprAtom += &String;
+    ExprAtom += &FunctionCall;
 
     ExprInfixOp += &PLUS;
     ExprInfixOp += &HYPHEN;
@@ -51,27 +53,28 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     ExprPrefixOp += &PLUS;
     ExprPrefixOp += &HYPHEN;
 
+    FunctionCall += &Ident + &PAREN_L + &PAREN_R;
+    FunctionCall += &Ident + &PAREN_L + &Expr + star(&COMMA + &Expr) + opt(&COMMA) + &PAREN_R;
+
     // Tokens.
     // They also eat up any trivia right after them.
 
-    Ident += not(&KW) + (XidStart | "_") + star(XidContinue) + &Trivia;
+    Ident += not(&KW) + (Utf8XidStart | "_") + star(Utf8XidContinue) + &Trivia;
 
     Number += &INTEGER;
     Number += &FLOATING;
 
-    INTEGER += plus(['0', '9']) + not(Alphanumeric) + &Trivia;
-    FLOATING += plus(['0', '9'])
-        + "."
-        + star(['0', '9'])
-        + (eps() + "f" | "F")
-        + not(Alphanumeric)
-        + &Trivia;
+    let c09 = || class("0-9");
+    let cazAZ09 = || class("a-zA-Z0-9");
 
-    String += &QUOTE_S + star(not(&QUOTE_S) + not(&EOL) + any()) + &QUOTE_S;
-    String += &QUOTE_D + star(not(&QUOTE_D) + not(&EOL) + any()) + &QUOTE_D;
+    INTEGER += plus(c09()) + not(cazAZ09()) + &Trivia;
+    FLOATING += plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09()) + &Trivia;
+
+    String += &QUOTE_S + star(not(&QUOTE_S) + any()) + &QUOTE_S;
+    String += &QUOTE_D + star(not(&QUOTE_D) + any()) + &QUOTE_D;
 
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
-    Trivia += star(Whitespace | &Comment);
+    Trivia += star(Utf8Whitespace | &Comment);
 
     EOF += not(any());
     EOL += "\n";
@@ -79,6 +82,9 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     EOL += "\r";
     EOL += &EOF;
 
+    DOT += "." + not(".") + &Trivia;
+    DOTDOT += ".." + &Trivia;
+    COMMA += "," + &Trivia;
     SEMICOLON += ";" + &Trivia;
     PLUS += "+" + not("+") + &Trivia;
     PLUSPLUS += "++" + &Trivia;
@@ -95,7 +101,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     BRACES_R += "}" + &Trivia;
 
     // End-of-keyword, helper to avoid issues like "funhello" being matched by `"fun" ident`
-    EOKW += not(Alphanumeric | "_") + &Trivia;
+    EOKW += not(class("a-zA-Z0-9_")) + &Trivia;
     KW += &KW_fun;
     KW_fun += "fun" + &EOKW;
 
