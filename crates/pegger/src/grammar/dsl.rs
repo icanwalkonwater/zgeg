@@ -4,7 +4,7 @@ use std::{
     ops::{Add, AddAssign, BitOr},
 };
 
-use crate::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
+use super::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
@@ -67,9 +67,9 @@ impl PegGrammarBuilder {
 ///
 /// # Example
 /// ```rust
-/// # use pegger::dsl::*;
+/// # use pegger::grammar::dsl::*;
 /// let mut g = PegGrammarBuilder::default();
-/// setup_rules!(g; root, sum, value);
+/// declare_rules!(g; root, sum, value);
 ///
 /// root += &sum;
 /// value += eps() + ['0', '9'];

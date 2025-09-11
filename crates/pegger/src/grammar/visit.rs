@@ -1,4 +1,4 @@
-use crate::{PegCharacterClass, PegExpression, PegRule, PegRuleName};
+use super::{PegCharacterClass, PegExpression, PegRule, PegRuleName};
 
 #[allow(unused_variables)]
 pub trait PegExpressionVisitor {

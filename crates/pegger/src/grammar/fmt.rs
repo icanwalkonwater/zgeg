@@ -1,9 +1,9 @@
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter};
 
-use crate::{PegCharacterClass, PegExpression, PegGrammar, PegRule};
+use super::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
 
 impl Display for PegGrammar {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for n in &self.rules {
             writeln!(f, "{}", n)?;
             writeln!(f)?;
@@ -12,8 +12,14 @@ impl Display for PegGrammar {
     }
 }
 
+impl Display for PegRuleName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl Display for PegRule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}:", self.name)?;
         match self.choices.len() {
             0 => write!(
@@ -34,7 +40,7 @@ impl Display for PegRule {
 }
 
 impl Display for PegExpression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::LiteralExact(r) => {
                 write!(f, "\"")?;
@@ -86,7 +92,7 @@ impl Display for PegExpression {
 }
 
 impl Display for PegCharacterClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::UserDefined(classes) => {
                 write!(f, "[")?;
@@ -104,7 +110,7 @@ impl Display for PegCharacterClass {
     }
 }
 
-fn write_char_escaped(f: &mut std::fmt::Formatter, c: char) -> std::fmt::Result {
+fn write_char_escaped(f: &mut Formatter, c: char) -> fmt::Result {
     if c.is_ascii() {
         for cc in std::ascii::escape_default(c as u8) {
             write!(f, "{}", cc as char)?;
