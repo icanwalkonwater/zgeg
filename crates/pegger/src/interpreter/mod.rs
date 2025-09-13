@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     grammar::{PegCharacterClass, PegExpression, PegGrammar, PegRuleName},
     packrat::PackratParser,
@@ -34,11 +32,6 @@ struct PegInterpreterState<'g, 'p, 't> {
     grammar: &'g PegGrammar,
     parser: &'p mut PackratParser<PegRuleName, ParseTreeNode>,
     tree: &'t mut ParseTreeBuilder,
-}
-
-enum PegInterpreterResult {
-    Match(ParseTreeNode),
-    NoMatch,
 }
 
 impl PegInterpreterState<'_, '_, '_> {

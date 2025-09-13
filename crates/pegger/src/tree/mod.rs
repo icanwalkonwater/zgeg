@@ -21,7 +21,6 @@ pub struct Span(pub usize, pub usize);
 
 #[derive(Debug, Default)]
 pub struct ParseTreeBuilder {
-    gen: usize,
     node_stack: Vec<(NodeBuilder, Vec<ParseTreeNode>)>,
     tree: Option<ParseTree>,
 }
@@ -83,12 +82,6 @@ impl ParseTreeBuilder {
     pub fn into_tree(self) -> ParseTree {
         self.tree.unwrap()
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ParseTreeBuilderId {
-    gen: usize,
-    index: usize,
 }
 
 #[cfg(test)]
