@@ -1,18 +1,22 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash};
+use std::{collections::HashMap, hash::Hash};
 
-pub struct PackratParser<R = &'static str> {
+pub struct PackratParser<R = &'static str, D = bool> {
     input: String,
     position: usize,
-    memo: HashMap<(R, usize), bool>,
+    memo: HashMap<(R, PackratMark), Option<(PackratMark, D)>>,
 }
 
-impl<R: Copy + Hash + Eq> PackratParser<R> {
+impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
     pub fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),
             position: 0,
             memo: Default::default(),
         }
+    }
+
+    pub fn position(&self) -> usize {
+        self.position
     }
 
     pub fn mark(&self) -> PackratMark {
@@ -29,12 +33,21 @@ impl<R: Copy + Hash + Eq> PackratParser<R> {
         c
     }
 
-    pub fn memo(&self, rule: R, mark: PackratMark) -> Option<bool> {
-        self.memo.get(&(rule, mark.0)).copied()
+    pub fn advance(&mut self, by: usize) {
+        self.position += by;
     }
 
-    pub fn memoize(&mut self, rule: R, mark: PackratMark, value: bool) {
-        self.memo.insert((rule, mark.0), value);
+    pub fn memo(&mut self, rule: R, start: PackratMark) -> Option<Option<(PackratMark, D)>> {
+        self.memo.get(&(rule, start)).cloned()
+    }
+
+    pub fn memoize_match(&mut self, rule: R, start: PackratMark, end: PackratMark, value: D) {
+        assert!(start.0 <= end.0);
+        self.memo.insert((rule, start), Some((end, value)));
+    }
+
+    pub fn memoize_miss(&mut self, rule: R, start: PackratMark) {
+        self.memo.insert((rule, start), None);
     }
 
     // Utils
@@ -49,7 +62,7 @@ impl<R: Copy + Hash + Eq> PackratParser<R> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PackratMark(usize);
 
 impl PackratMark {

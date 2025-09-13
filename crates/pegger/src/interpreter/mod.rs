@@ -3,44 +3,89 @@ use std::time::Duration;
 use crate::{
     grammar::{PegCharacterClass, PegExpression, PegGrammar, PegRuleName},
     packrat::PackratParser,
+    tree::{ParseTree, ParseTreeBuilder, ParseTreeNode},
 };
 
-struct PegInterpreterState<'g, 'p> {
-    grammar: &'g PegGrammar,
-    parser: &'p mut PackratParser,
-}
-
-pub fn parse_with_grammar(g: &PegGrammar, rule: &'static str, input: impl Into<String>) -> bool {
+pub fn parse_with_grammar(
+    g: &PegGrammar,
+    rule: &'static str,
+    input: impl Into<String>,
+) -> Option<ParseTree> {
     let mut parser = PackratParser::new(input);
+    let mut tree = ParseTreeBuilder::default();
 
     let mut state = PegInterpreterState {
         grammar: g,
         parser: &mut parser,
+        tree: &mut tree,
     };
-    state.eval_nonterminal(PegRuleName(rule))
+    let matches = state.eval_nonterminal(PegRuleName(rule));
+
+    match matches {
+        true => Some(tree.into_tree()),
+        false => {
+            println!("Partial tree: {tree:#?}");
+            None
+        }
+    }
 }
 
-impl<'g, 'p> PegInterpreterState<'g, 'p> {
-    fn eval_nonterminal(&mut self, rule: PegRuleName) -> bool {
-        let mark = self.parser.mark();
-        if let Some(v) = self.parser.memo(rule.0, mark) {
-            println!("Eval {rule} at {} (memo)", mark.offset());
-            return v;
-        }
-        println!("Eval {rule} at {}", mark.offset());
+struct PegInterpreterState<'g, 'p, 't> {
+    grammar: &'g PegGrammar,
+    parser: &'p mut PackratParser<PegRuleName, ParseTreeNode>,
+    tree: &'t mut ParseTreeBuilder,
+}
 
-        let mut res = false;
+enum PegInterpreterResult {
+    Match(ParseTreeNode),
+    NoMatch,
+}
+
+impl PegInterpreterState<'_, '_, '_> {
+    fn eval_nonterminal(&mut self, rule: PegRuleName) -> bool {
+        let start = self.parser.mark();
+
+        if let Some(memo) = self.parser.memo(rule, start) {
+            // There is a result cached.
+            println!("Eval {rule} at {} (memo)", start.offset());
+            match memo {
+                Some((end, node)) => {
+                    self.parser.reset_to(end);
+                    self.tree.push_node(node);
+                    return true;
+                }
+                None => {
+                    self.parser.reset_to(start);
+                    return false;
+                }
+            }
+        }
+
+        println!("Eval {rule} at {}", start.offset());
+
+        self.tree.begin_node(rule.0, self.parser.position());
+
+        let mut matches = false;
         for choice in self.grammar.rule(rule).choices() {
             if self.eval_expression(choice) {
                 // Stop at the first match
-                res = true;
+                matches = true;
                 break;
             }
-            self.parser.reset_to(mark);
+            self.parser.reset_to(start);
         }
 
-        self.parser.memoize(rule.0, mark, res);
-        res
+        if matches {
+            let end = self.parser.mark();
+            let node = self.tree.end_node(end.offset());
+            self.parser.memoize_match(rule, start, end, node);
+            true
+        } else {
+            self.tree.abandon_node();
+            self.parser.memoize_miss(rule, start);
+            self.parser.reset_to(start);
+            false
+        }
     }
 
     fn eval_expression(&mut self, expr: &PegExpression) -> bool {
@@ -65,7 +110,7 @@ impl<'g, 'p> PegInterpreterState<'g, 'p> {
                     false
                 }
             }
-            PegExpression::Rule(nt) => self.eval_nonterminal(*nt),
+            PegExpression::Rule(rule) => self.eval_nonterminal(*rule),
             PegExpression::Seq(first, second) => {
                 self.eval_expression(first) && self.eval_expression(second)
             }
@@ -96,8 +141,13 @@ impl<'g, 'p> PegInterpreterState<'g, 'p> {
             }
             PegExpression::Predicate { expr, positive } => {
                 let mark = self.parser.mark();
+                let tree_mark = self.tree.current_node_children_count();
+
                 let matches = self.eval_expression(expr);
+
                 self.parser.reset_to(mark);
+                // Very ugly way of not counting the lookahead generated nodes.
+                self.tree.cut_current_node_children(tree_mark);
 
                 // scary shit
                 //   - bitsneak (probably)
