@@ -1,16 +1,18 @@
+use std::sync::Arc;
+
 use crate::{
     grammar::{PegCharacterClass, PegExpression, PegGrammar, PegRuleName},
     packrat::PackratParser,
-    tree::{ParseNode, ParseTree, ParseTreeBuilder},
+    tree::{ExactParseNode, ExactParseTree, ExactParseTreeBuilder},
 };
 
 pub fn parse_with_grammar(
     g: &PegGrammar,
     rule: &'static str,
     input: impl Into<String>,
-) -> Option<ParseTree> {
+) -> Option<ExactParseTree<&'static str>> {
     let mut parser = PackratParser::new(input);
-    let mut tree = ParseTreeBuilder::default();
+    let mut tree = ExactParseTreeBuilder::default();
 
     let mut state = PegInterpreterState {
         grammar: g,
@@ -20,7 +22,7 @@ pub fn parse_with_grammar(
     let matches = state.eval_nonterminal(PegRuleName(rule));
 
     match matches {
-        true => Some(tree.into_tree()),
+        true => Some(tree.build()),
         false => {
             println!("Partial tree: {tree:#?}");
             None
@@ -30,8 +32,8 @@ pub fn parse_with_grammar(
 
 struct PegInterpreterState<'g, 'p, 't> {
     grammar: &'g PegGrammar,
-    parser: &'p mut PackratParser<PegRuleName, ParseNode>,
-    tree: &'t mut ParseTreeBuilder,
+    parser: &'p mut PackratParser<PegRuleName, Arc<ExactParseNode<&'static str>>>,
+    tree: &'t mut ExactParseTreeBuilder<&'static str>,
 }
 
 impl PegInterpreterState<'_, '_, '_> {
@@ -43,7 +45,7 @@ impl PegInterpreterState<'_, '_, '_> {
             match memo {
                 Some((end, node)) => {
                     self.parser.reset_to(end);
-                    self.tree.push_node(node);
+                    self.tree.insert_node(node);
                     return true;
                 }
                 None => {
@@ -53,7 +55,7 @@ impl PegInterpreterState<'_, '_, '_> {
             }
         }
 
-        self.tree.begin_node(rule.0, self.parser.position());
+        self.tree.start_node(rule.0);
 
         let mut matches = false;
         for choice in self.grammar.rule(rule).choices() {
@@ -67,11 +69,11 @@ impl PegInterpreterState<'_, '_, '_> {
 
         if matches {
             let end = self.parser.mark();
-            let node = self.tree.end_node(end.offset());
+            let node = self.tree.finish_node();
             self.parser.memoize_match(rule, start, end, node);
             true
         } else {
-            self.tree.abandon_node();
+            self.tree.trash_node();
             self.parser.memoize_miss(rule, start);
             self.parser.reset_to(start);
             false
@@ -81,13 +83,25 @@ impl PegInterpreterState<'_, '_, '_> {
     fn eval_expression(&mut self, expr: &PegExpression) -> bool {
         let mark = self.parser.mark();
         let matches = match expr {
-            PegExpression::LiteralExact(lit) => self.parser.expect(lit),
+            PegExpression::LiteralExact(lit) => {
+                if self.parser.expect(lit) {
+                    self.tree.push_token_node("LITERAL", lit);
+                    true
+                } else {
+                    false
+                }
+            }
             PegExpression::LiteralRange { from, to } => {
-                self.parser.eat().filter(|c| from <= c && c <= to).is_some()
+                if let Some(c) = self.parser.eat().filter(|c| from <= c && c <= to) {
+                    self.tree.push_token_node("LITERAL", &c.to_string());
+                    true
+                } else {
+                    false
+                }
             }
             PegExpression::LiteralClass(class) => {
                 if let Some(c) = self.parser.eat() {
-                    match class {
+                    let res = match class {
                         PegCharacterClass::UserDefined(ranges) => {
                             ranges.iter().any(|[from, to]| *from <= c && c <= *to)
                         }
@@ -95,7 +109,11 @@ impl PegInterpreterState<'_, '_, '_> {
                         PegCharacterClass::Utf8Whitespace => c.is_whitespace(),
                         PegCharacterClass::Utf8XidStart => unicode_id_start::is_id_start(c),
                         PegCharacterClass::Utf8XidContinue => unicode_id_start::is_id_continue(c),
+                    };
+                    if res {
+                        self.tree.push_token_node("LITERAL", &c.to_string());
                     }
+                    res
                 } else {
                     false
                 }
@@ -131,13 +149,13 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::Predicate { expr, positive } => {
                 let mark = self.parser.mark();
-                let tree_mark = self.tree.current_node_children_count();
+                self.tree.pause_parenting();
 
                 let matches = self.eval_expression(expr);
 
-                self.parser.reset_to(mark);
                 // Very ugly way of not counting the lookahead generated nodes.
-                self.tree.cut_current_node_children(tree_mark);
+                self.tree.resume_parenting();
+                self.parser.reset_to(mark);
 
                 // scary shit
                 //   - bitsneak (probably)
@@ -147,7 +165,14 @@ impl PegInterpreterState<'_, '_, '_> {
                     !matches
                 }
             }
-            PegExpression::Anything => self.parser.eat().is_some(),
+            PegExpression::Anything => {
+                if let Some(c) = self.parser.eat() {
+                    self.tree.push_token_node("LITERAL", &c.to_string());
+                    true
+                } else {
+                    false
+                }
+            }
             PegExpression::Nothing => true,
         };
 

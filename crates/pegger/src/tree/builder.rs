@@ -1,147 +1,211 @@
+use std::{collections::HashSet, hash::Hash};
+
 use super::*;
 
 #[derive(Debug, Default)]
-pub struct ParseTreeBuilder {
-    node_stack: Vec<(ParseNodeBuilder, Vec<ParseNode>)>,
-    tree: Option<ParseTree>,
+pub struct ExactParseTreeBuilder<K> {
+    interner_nodes: HashSet<Arc<ExactParseNode<K>>>,
+    interner_tokens: HashSet<Arc<ExactParseToken<K>>>,
+    interner_text: HashSet<Arc<str>>,
+    stack: Vec<BuilderState<K>>,
+    tree: Option<ExactParseTree<K>>,
 }
 
 #[derive(Debug)]
-struct ParseNodeBuilder {
-    kind: &'static str,
-    start: usize,
+struct BuilderState<K> {
+    kind: K,
+    children: Vec<ExactParseNodeOrToken<K>>,
+    parenting: bool,
 }
 
-impl ParseTreeBuilder {
-    pub fn push_node(&mut self, node: ParseNode) {
-        assert!(self.tree.is_none(), "A parse tree has already been built");
-        if !self.node_stack.is_empty() {
-            let (_, children) = self.node_stack.last_mut().unwrap();
-            children.push(node);
+impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
+    pub fn push_token_node(&mut self, kind: K, text: &str) -> Arc<ExactParseToken<K>> {
+        let token = ExactParseToken::new(kind, self.interned_text(text));
+        let token = self.interned_token(token);
+
+        if let Some(state) = self.current() {
+            if state.parenting {
+                state
+                    .children
+                    .push(ExactParseNodeOrToken::Token(token.clone()));
+            }
+        }
+
+        token
+    }
+
+    pub fn start_node(&mut self, kind: K) {
+        self.stack.push(BuilderState {
+            kind,
+            children: Default::default(),
+            parenting: true,
+        });
+    }
+
+    pub fn finish_node(&mut self) -> Arc<ExactParseNode<K>> {
+        let BuilderState { kind, children, .. } = self.stack.pop().unwrap();
+        let len = children.iter().map(|n| n.len()).sum::<ExactParseNodeSize>();
+        let node = ExactParseNode::new(kind, len, children);
+        let node = self.interned_node(node);
+
+        self.insert_node(node.clone());
+
+        node
+    }
+
+    pub fn insert_node(&mut self, node: Arc<ExactParseNode<K>>) {
+        if let Some(state) = self.current() {
+            if state.parenting {
+                state
+                    .children
+                    .push(ExactParseNodeOrToken::Node(node.clone()));
+            }
         } else {
-            self.tree = Some(ParseTree { root: node });
+            self.tree = Some(ExactParseTree::from_root(node.clone()));
         }
     }
 
-    pub fn begin_node(&mut self, kind: &'static str, offset: usize) {
-        self.node_stack.push((
-            ParseNodeBuilder {
-                kind,
-                start: offset,
-            },
-            Default::default(),
-        ));
+    pub fn trash_node(&mut self) {
+        self.stack.pop().unwrap();
     }
 
-    pub fn current_node_children_count(&self) -> usize {
-        self.node_stack.last().map(|(_, c)| c.len()).unwrap_or(0)
+    pub fn build(self) -> ExactParseTree<K> {
+        self.tree.unwrap()
     }
 
-    pub fn cut_current_node_children(&mut self, max: usize) {
-        if let Some((_, c)) = self.node_stack.last_mut() {
-            while c.len() > max {
-                c.pop();
+    pub fn pause_parenting(&mut self) {
+        self.current().unwrap().parenting = false;
+    }
+
+    pub fn resume_parenting(&mut self) {
+        self.current().unwrap().parenting = true;
+    }
+
+    fn current(&mut self) -> Option<&mut BuilderState<K>> {
+        self.stack.last_mut()
+    }
+
+    fn interned_text(&mut self, text: &str) -> Arc<str> {
+        match self.interner_text.get(text) {
+            Some(t) => t.clone(),
+            None => {
+                let t = Arc::<str>::from(text);
+                self.interner_text.insert(t.clone());
+                t
             }
         }
     }
 
-    pub fn abandon_node(&mut self) {
-        self.node_stack.pop();
+    fn interned_token(&mut self, token: ExactParseToken<K>) -> Arc<ExactParseToken<K>> {
+        match self.interner_tokens.get(&token) {
+            Some(t) => t.clone(),
+            None => {
+                let t = Arc::new(token);
+                self.interner_tokens.insert(t.clone());
+                t
+            }
+        }
     }
 
-    pub fn end_node(&mut self, offset: usize) -> ParseNode {
-        let (builder, children) = self.node_stack.pop().unwrap();
-        let node = ParseNode {
-            kind: builder.kind,
-            span: Span(builder.start, offset),
-            children,
-        };
-        self.push_node(node.clone());
-        node
-    }
-
-    pub fn into_tree(self) -> ParseTree {
-        self.tree.unwrap()
+    fn interned_node(&mut self, node: ExactParseNode<K>) -> Arc<ExactParseNode<K>> {
+        match self.interner_nodes.get(&node) {
+            Some(t) => t.clone(),
+            None => {
+                let t = Arc::new(node);
+                self.interner_nodes.insert(t.clone());
+                t
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::tree::{ParseNode, ParseTree, ParseTreeBuilder, Span};
+    use std::sync::Arc;
+
+    use crate::tree::{
+        ExactParseNode, ExactParseNodeOrToken, ExactParseToken, ExactParseTree,
+        ExactParseTreeBuilder,
+    };
 
     #[test]
     fn simple() {
-        let mut builder = ParseTreeBuilder::default();
+        let mut builder = ExactParseTreeBuilder::default();
 
-        builder.begin_node("hello", 0);
-        builder.begin_node("hi", 0);
-        builder.end_node(2);
-        builder.begin_node("ho", 2);
-        builder.end_node(3);
-        builder.end_node(3);
+        builder.start_node("hello");
+        builder.start_node("hi");
+        builder.push_token_node("LITERAL", "aa");
+        builder.finish_node();
+        builder.start_node("ho");
+        builder.push_token_node("LITERAL", "b");
+        builder.finish_node();
+        builder.finish_node();
 
-        let t = builder.into_tree();
+        let t = builder.build();
 
         pretty_assertions::assert_eq!(
             t,
-            ParseTree {
-                root: ParseNode {
-                    kind: "hello",
-                    span: Span(0, 3),
-                    children: vec![
-                        ParseNode {
-                            kind: "hi",
-                            span: Span(0, 2),
-                            children: vec![],
-                        },
-                        ParseNode {
-                            kind: "ho",
-                            span: Span(2, 3),
-                            children: vec![],
-                        }
-                    ]
-                }
-            }
+            ExactParseTree::from_root(Arc::new(ExactParseNode::new(
+                "hello",
+                3,
+                vec![
+                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                        "hi",
+                        2,
+                        vec![ExactParseNodeOrToken::Token(Arc::new(
+                            ExactParseToken::new("LITERAL", Arc::from("aa"))
+                        ))]
+                    ))),
+                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                        "ho",
+                        1,
+                        vec![ExactParseNodeOrToken::Token(Arc::new(
+                            ExactParseToken::new("LITERAL", Arc::from("b"))
+                        ))]
+                    )))
+                ]
+            ))),
         );
     }
 
     #[test]
     fn skip_some() {
-        let mut builder = ParseTreeBuilder::default();
+        let mut builder = ExactParseTreeBuilder::default();
 
-        builder.begin_node("hello", 0);
-        builder.begin_node("hi", 0);
-        builder.end_node(2);
-        let mark = builder.current_node_children_count();
-        builder.begin_node("skipped", 2);
-        builder.end_node(2);
-        builder.cut_current_node_children(mark);
-        builder.begin_node("ho", 2);
-        builder.end_node(3);
-        builder.end_node(3);
+        builder.start_node("hello");
+        builder.start_node("hi");
+        builder.push_token_node("LITERAL", "aa");
+        builder.finish_node();
+        builder.pause_parenting();
+        builder.push_token_node("LITERAL", "owo");
+        builder.start_node("owo");
+        builder.push_token_node("LITERAL", "uwu");
+        builder.finish_node();
+        builder.resume_parenting();
+        builder.push_token_node("LITERAL", "b");
+        builder.finish_node();
 
-        let t = builder.into_tree();
+        let t = builder.build();
 
         pretty_assertions::assert_eq!(
             t,
-            ParseTree {
-                root: ParseNode {
-                    kind: "hello",
-                    span: Span(0, 3),
-                    children: vec![
-                        ParseNode {
-                            kind: "hi",
-                            span: Span(0, 2),
-                            children: vec![],
-                        },
-                        ParseNode {
-                            kind: "ho",
-                            span: Span(2, 3),
-                            children: vec![],
-                        }
-                    ]
-                }
-            }
+            ExactParseTree::from_root(Arc::new(ExactParseNode::new(
+                "hello",
+                3,
+                vec![
+                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                        "hi",
+                        2,
+                        vec![ExactParseNodeOrToken::Token(Arc::new(
+                            ExactParseToken::new("LITERAL", Arc::from("aa"))
+                        ))]
+                    ))),
+                    ExactParseNodeOrToken::Token(Arc::new(ExactParseToken::new(
+                        "LITERAL",
+                        Arc::from("b")
+                    )))
+                ]
+            ))),
         );
     }
 }
