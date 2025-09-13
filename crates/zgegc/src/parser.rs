@@ -29,7 +29,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         KW_fun,
     );
 
-    File += &Trivia + star(&Item) + &EOF;
+    File += star(&Item) + &Trivia + &EOF;
 
     Item += &ItemFunction;
 
@@ -59,7 +59,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     // Tokens.
     // They also eat up any trivia right after them.
 
-    Ident += not(&KW) + (Utf8XidStart | "_") + star(Utf8XidContinue) + &Trivia;
+    Ident += &Trivia + not(&KW) + (Utf8XidStart | "_") + star(Utf8XidContinue);
 
     Number += &INTEGER;
     Number += &FLOATING;
@@ -67,11 +67,11 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     let c09 = || class("0-9");
     let cazAZ09 = || class("a-zA-Z0-9");
 
-    INTEGER += plus(c09()) + not(cazAZ09()) + &Trivia;
-    FLOATING += plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09()) + &Trivia;
+    INTEGER += &Trivia + plus(c09()) + not(cazAZ09());
+    FLOATING += &Trivia + plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09());
 
-    STRING += "'" + star(not(&QUOTE_S) + any()) + "'" + &Trivia;
-    STRING += "\"" + star(not(&QUOTE_D) + any()) + "\"" + &Trivia;
+    STRING += &Trivia + "'" + star(not(&QUOTE_S) + any()) + "'";
+    STRING += &Trivia + "\"" + star(not(&QUOTE_D) + any()) + "\"";
 
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
     Trivia += star(Utf8Whitespace | &Comment);
@@ -80,30 +80,29 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     EOL += "\n";
     EOL += "\r\n";
     EOL += "\r";
-    EOL += &EOF;
 
-    DOT += "." + not(".") + &Trivia;
-    DOTDOT += ".." + &Trivia;
-    COMMA += "," + &Trivia;
-    SEMICOLON += ";" + &Trivia;
-    PLUS += "+" + not("+") + &Trivia;
-    PLUSPLUS += "++" + &Trivia;
-    HYPHEN += "-" + not("-") + &Trivia;
-    HYPHENHYPHEN += "--" + &Trivia;
-    STAR += "*" + not("*") + &Trivia;
-    STARSTAR += "**" + &Trivia;
-    QUOTE_S += "'" + &Trivia;
-    QUOTE_D += "\"" + &Trivia;
-    SLASH_F += "/" + not("/") + &Trivia;
-    PAREN_L += "(" + &Trivia;
-    PAREN_R += ")" + &Trivia;
-    BRACES_L += "{" + &Trivia;
-    BRACES_R += "}" + &Trivia;
+    DOT += &Trivia + "." + not(".");
+    DOTDOT += &Trivia + "..";
+    COMMA += &Trivia + ",";
+    SEMICOLON += &Trivia + ";";
+    PLUS += &Trivia + "+" + not("+");
+    PLUSPLUS += &Trivia + "++";
+    HYPHEN += &Trivia + "-" + not("-");
+    HYPHENHYPHEN += &Trivia + "--";
+    STAR += &Trivia + "*" + not("*");
+    STARSTAR += &Trivia + "**";
+    QUOTE_S += &Trivia + "'";
+    QUOTE_D += &Trivia + "\"";
+    SLASH_F += &Trivia + "/" + not("/");
+    PAREN_L += &Trivia + "(";
+    PAREN_R += &Trivia + ")";
+    BRACES_L += &Trivia + "{";
+    BRACES_R += &Trivia + "}";
 
     // End-of-keyword, helper to avoid issues like "funhello" being matched by `"fun" ident`
-    EOKW += not(class("a-zA-Z0-9_")) + &Trivia;
+    EOKW += not(class("a-zA-Z0-9_"));
     KW += &KW_fun;
-    KW_fun += "fun" + &EOKW;
+    KW_fun += &Trivia + "fun" + &EOKW;
 
     g.build()
 }
