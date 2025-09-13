@@ -7,5 +7,9 @@ fn main() {
     dbg!(&file);
 
     let g = make_zgeg_grammar();
-    dbg!(parse_with_grammar(&g, "File", file));
+    if let Some(tree) = parse_with_grammar(&g, "File", file) {
+        println!("{tree}");
+    } else {
+        println!("Syntax error");
+    }
 }

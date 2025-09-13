@@ -1,7 +1,7 @@
 use crate::{
     grammar::{PegCharacterClass, PegExpression, PegGrammar, PegRuleName},
     packrat::PackratParser,
-    tree::{ParseTree, ParseTreeBuilder, ParseTreeNode},
+    tree::{ParseNode, ParseTree, ParseTreeBuilder},
 };
 
 pub fn parse_with_grammar(
@@ -30,7 +30,7 @@ pub fn parse_with_grammar(
 
 struct PegInterpreterState<'g, 'p, 't> {
     grammar: &'g PegGrammar,
-    parser: &'p mut PackratParser<PegRuleName, ParseTreeNode>,
+    parser: &'p mut PackratParser<PegRuleName, ParseNode>,
     tree: &'t mut ParseTreeBuilder,
 }
 
@@ -40,7 +40,6 @@ impl PegInterpreterState<'_, '_, '_> {
 
         if let Some(memo) = self.parser.memo(rule, start) {
             // There is a result cached.
-            println!("Eval {rule} at {} (memo)", start.offset());
             match memo {
                 Some((end, node)) => {
                     self.parser.reset_to(end);
@@ -53,8 +52,6 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
         }
-
-        println!("Eval {rule} at {}", start.offset());
 
         self.tree.begin_node(rule.0, self.parser.position());
 
