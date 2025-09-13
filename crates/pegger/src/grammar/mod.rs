@@ -26,10 +26,18 @@ impl PegGrammar {
 
         Ok(Self { rules })
     }
+
+    pub fn rule_by_name(&self, name: &'static str) -> &PegRule {
+        self.rule(PegRuleName(name))
+    }
+
+    pub fn rule(&self, name: PegRuleName) -> &PegRule {
+        self.rules.iter().find(|r| r.name == name).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PegRuleName(&'static str);
+pub struct PegRuleName(pub(crate) &'static str);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegRule {
@@ -47,6 +55,14 @@ impl PegRule {
             name: PegRuleName(name),
             choices: choices.into_iter().collect(),
         }
+    }
+
+    pub fn name(&self) -> PegRuleName {
+        self.name
+    }
+
+    pub fn choices(&self) -> &[PegExpression] {
+        &self.choices
     }
 }
 

@@ -17,7 +17,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
 
         Ident,
         Number, INTEGER, FLOATING,
-        String,
+        STRING,
         Comment, Trivia,
         EOF, EOL,
         DOT, DOTDOT, COMMA, SEMICOLON,
@@ -43,7 +43,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     Expr += opt(&ExprPrefixOp) + &ExprAtom + opt(&ExprPostfixOp) + opt(&ExprInfixOp + &Expr);
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
     ExprAtom += &Number;
-    ExprAtom += &String;
+    ExprAtom += &STRING;
     ExprAtom += &FunctionCall;
 
     ExprInfixOp += &PLUS;
@@ -70,8 +70,8 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     INTEGER += plus(c09()) + not(cazAZ09()) + &Trivia;
     FLOATING += plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09()) + &Trivia;
 
-    String += &QUOTE_S + star(not(&QUOTE_S) + any()) + &QUOTE_S;
-    String += &QUOTE_D + star(not(&QUOTE_D) + any()) + &QUOTE_D;
+    STRING += "'" + star(not(&QUOTE_S) + any()) + "'" + &Trivia;
+    STRING += "\"" + star(not(&QUOTE_D) + any()) + "\"" + &Trivia;
 
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
     Trivia += star(Utf8Whitespace | &Comment);

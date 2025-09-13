@@ -10,3 +10,4 @@ edition = "2021"
 clap = { version = "4.5", features = ["derive"] }
 regex = "1.11"
 pretty_assertions = "1.4"
+unicode-id-start = "1.4"
