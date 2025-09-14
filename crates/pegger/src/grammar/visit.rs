@@ -1,53 +1,73 @@
-use super::{PegCharacterClass, PegExpression, PegRule, PegRuleName};
+use super::{PegCharacterClass, PegExpression, PegRuleName};
 
-#[allow(unused_variables)]
-pub trait PegExpressionVisitor {
-    fn visit_literal_keyword(&mut self, keyword: &mut &'static str) {}
-    fn visit_literal_range(&mut self, from: &mut char, to: &mut char) {}
-    fn visit_literal_class(&mut self, class: &mut PegCharacterClass) {}
-    fn visit_rule(&mut self, name: &mut PegRuleName) {}
-    fn visit_seq(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}
-    fn visit_choice(&mut self, left: &mut PegExpression, right: &mut PegExpression) {}
-    fn visit_repetition(&mut self, expr: &mut PegExpression, min: &mut u32, max: &mut Option<u32>) {
-    }
-    fn visit_predicate(&mut self, pred: &mut PegExpression, positive: &mut bool) {}
-    fn visit_anything(&mut self) {}
-    fn visit_nothing(&mut self) {}
+macro_rules! make_visitors {
+    ($visitor_const:ident, $visitor_mut:ident {
+        $( fn $visit_const:ident, $visit_mut:ident ($visitor:ident $(, $arg_name:ident : $arg_ty:ty)* $(,)? ) $body_const:expr, $body_mut:expr )*
+    }) => {
+        pub trait $visitor_const: Sized {
+            $(
+                fn $visit_const(&mut self, $($arg_name : &$arg_ty),*) {
+                    $visit_const(self, $($arg_name,)*);
+                }
+            )*
+        }
+
+        pub trait $visitor_mut: Sized {
+            $(
+                fn $visit_mut(&mut self, $($arg_name : &mut $arg_ty),*) {
+                    $visit_mut(self, $($arg_name,)*);
+                }
+            )*
+        }
+
+        $( #[allow(unused_variables)] pub fn $visit_const($visitor: &mut impl $visitor_const, $($arg_name : &$arg_ty),*) { $body_const } )*
+        $( #[allow(unused_variables)] pub fn $visit_mut($visitor: &mut impl $visitor_mut, $($arg_name : &mut $arg_ty),*) { $body_mut } )*
+    };
 }
 
-pub fn visit_peg_expression(expr: &mut PegExpression, visitor: &mut impl PegExpressionVisitor) {
-    use PegExpression::*;
-    match expr {
-        LiteralExact(keyword) => visitor.visit_literal_keyword(keyword),
-        LiteralRange { from, to } => visitor.visit_literal_range(from, to),
-        LiteralClass(class) => visitor.visit_literal_class(class),
-        Rule(name) => visitor.visit_rule(name),
-        Seq(left, right) => {
-            visitor.visit_seq(left, right);
-            visit_peg_expression(left, visitor);
-            visit_peg_expression(right, visitor);
+make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
+    fn visit_expr, visit_expr_mut (v, expr: PegExpression)
+        match expr {
+            PegExpression::LiteralExact(kw) => v.visit_literal_keyword(kw),
+            PegExpression::LiteralRange{ from, to } => v.visit_literal_range(from, to),
+            PegExpression::LiteralClass(class) => v.visit_literal_class(class),
+            PegExpression::Rule(rule) => v.visit_rule(rule),
+            PegExpression::Seq(left, right) => v.visit_seq(left, right),
+            PegExpression::Choice(left, right) => v.visit_choice(left, right),
+            PegExpression::Repetition { expr, min, max } => v.visit_repetition(expr, min, max),
+            PegExpression::Predicate { expr, positive } => v.visit_predicate(expr, positive),
+            PegExpression::Anything => v.visit_anything(),
+            PegExpression::Epsilon => v.visit_epsilon(),
+        },
+        match expr {
+            PegExpression::LiteralExact(kw) => v.visit_literal_keyword_mut(kw),
+            PegExpression::LiteralRange{ from, to } => v.visit_literal_range_mut(from, to),
+            PegExpression::LiteralClass(class) => v.visit_literal_class_mut(class),
+            PegExpression::Rule(rule) => v.visit_rule_mut(rule),
+            PegExpression::Seq(left, right) => v.visit_seq_mut(left, right),
+            PegExpression::Choice(left, right) => v.visit_choice_mut(left, right),
+            PegExpression::Repetition { expr, min, max } => v.visit_repetition_mut(expr, min, max),
+            PegExpression::Predicate { expr, positive } => v.visit_predicate_mut(expr, positive),
+            PegExpression::Anything => v.visit_anything_mut(),
+            PegExpression::Epsilon => v.visit_epsilon_mut(),
         }
-        Choice(left, right) => {
-            visitor.visit_choice(left, right);
-            visit_peg_expression(left, visitor);
-            visit_peg_expression(right, visitor);
-        }
-        Repetition { expr, min, max } => {
-            visitor.visit_repetition(expr, min, max);
-            visit_peg_expression(expr, visitor);
-        }
-        Predicate {
-            expr: pred,
-            positive,
-        } => {
-            visitor.visit_predicate(pred, positive);
-            visit_peg_expression(pred, visitor);
-        }
-        Anything => visitor.visit_anything(),
-        Epsilon => visitor.visit_nothing(),
-    }
-}
 
-pub fn visit_peg_rule(rule: &mut PegRule, visitor: &mut impl PegExpressionVisitor) {
-    visit_peg_expression(&mut rule.expr, visitor);
-}
+    fn visit_literal_keyword, visit_literal_keyword_mut (v, keyword: &'static str) {}, {}
+    fn visit_literal_range, visit_literal_range_mut (v, from: char, to: char) {}, {}
+    fn visit_literal_class, visit_literal_class_mut (v, class: PegCharacterClass) {}, {}
+    fn visit_rule, visit_rule_mut (v, name: PegRuleName) {}, {}
+    fn visit_seq, visit_seq_mut (v, left: PegExpression, right: PegExpression)
+        { v.visit_expr(left); v.visit_expr(right); },
+        { v.visit_expr_mut(left); v.visit_expr_mut(right); }
+    fn visit_choice, visit_choice_mut (v, left: PegExpression, right: PegExpression)
+        { v.visit_expr(left); v.visit_expr(right); },
+        { v.visit_expr_mut(left); v.visit_expr_mut(right); }
+    fn visit_repetition, visit_repetition_mut (v, expr: PegExpression, min: u32, max: Option<u32>)
+        { v.visit_expr(expr); },
+        { v.visit_expr_mut(expr); }
+    fn visit_predicate, visit_predicate_mut (v, expr: PegExpression, positive: bool)
+        { v.visit_expr(expr); },
+        { v.visit_expr_mut(expr); }
+    fn visit_anything, visit_anything_mut (v) {}, {}
+    fn visit_epsilon, visit_epsilon_mut (v) {}, {}
+});

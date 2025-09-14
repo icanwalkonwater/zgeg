@@ -1,8 +1,9 @@
 pub mod dsl;
 mod fmt;
+mod simplify;
 mod visit;
 
-use visit::*;
+use simplify::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegGrammar {
@@ -77,7 +78,7 @@ impl PegRule {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PegExpression {
     LiteralExact(&'static str),
     LiteralRange {
@@ -182,32 +183,6 @@ impl PegExpression {
 
     pub fn epsilon() -> Self {
         Self::Epsilon
-    }
-
-    pub fn simplify(self) -> Self {
-        match self {
-            // These are not simplifyable
-            Self::LiteralExact(_)
-            | Self::LiteralRange { from: _, to: _ }
-            | Self::LiteralClass(_)
-            | Self::Rule(_)
-            | Self::Anything
-            | Self::Epsilon => self,
-            Self::Seq(l, r) => {
-                let l_simplified = l.simplify();
-                let r_simplified = r.simplify();
-                match (l_simplified, r_simplified) {
-                    (Self::Epsilon, e) | (e, Self::Epsilon) => e,
-                    (l, r) => Self::seq(l, r),
-                }
-            }
-            Self::Choice(l, r) => Self::choice(l.simplify(), r.simplify()),
-            Self::Repetition { expr, min, max } => Self::repetition(expr.simplify(), min, max),
-            Self::Predicate {
-                expr: pred,
-                positive,
-            } => Self::predicate(pred.simplify(), positive),
-        }
     }
 }
 

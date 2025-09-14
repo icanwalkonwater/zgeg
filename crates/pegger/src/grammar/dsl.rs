@@ -4,6 +4,8 @@ use std::{
     ops::{Add, AddAssign, BitOr},
 };
 
+use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier};
+
 use super::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
 
 #[derive(Default)]
@@ -44,20 +46,25 @@ impl PegGrammarBuilder {
     }
 
     fn append_to_rule(&self, name: PegRuleName, expr: PegExpression) {
-        self.rules[&name].borrow_mut().push(expr.simplify());
+        self.rules[&name].borrow_mut().push(expr);
     }
 
     pub fn build(mut self) -> PegGrammar {
         assert_eq!(self.names.len(), self.rules.len());
-        let rules = self
+        let mut rules = self
             .names
             .into_iter()
             .map(|name| {
                 let v = self.rules.remove(&name).unwrap();
                 (name, v)
             })
-            .map(|(name, choices)| PegRule::multi(name.0, choices.into_inner()))
+            .map(|(name, expr)| PegRule::multi(name.0, expr.into_inner()))
             .collect::<Vec<_>>();
+
+        // Simplify expressions.
+        for rule in &mut rules {
+            PegExpressionSimplifier.visit_expr_mut(&mut rule.expr);
+        }
 
         PegGrammar::new(rules).unwrap()
     }
