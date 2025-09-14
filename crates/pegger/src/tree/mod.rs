@@ -52,18 +52,13 @@ impl<K: Clone> ExactParseNode<K> {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct ExactParseToken<K> {
-    kind: K,
+pub struct ExactParseToken {
     text: Arc<str>,
 }
 
-impl<K: Clone> ExactParseToken<K> {
-    pub fn new(kind: K, text: Arc<str>) -> Self {
-        Self { kind, text }
-    }
-
-    pub fn kind(&self) -> K {
-        self.kind.clone()
+impl ExactParseToken {
+    pub fn new(text: Arc<str>) -> Self {
+        Self { text }
     }
 
     pub fn text(&self) -> &str {
@@ -74,17 +69,10 @@ impl<K: Clone> ExactParseToken<K> {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum ExactParseNodeOrToken<K> {
     Node(Arc<ExactParseNode<K>>),
-    Token(Arc<ExactParseToken<K>>),
+    Token(Arc<ExactParseToken>),
 }
 
 impl<K: Clone> ExactParseNodeOrToken<K> {
-    pub fn kind(&self) -> K {
-        match self {
-            Self::Node(n) => n.kind.clone(),
-            Self::Token(t) => t.kind.clone(),
-        }
-    }
-
     pub fn len(&self) -> ExactParseNodeSize {
         match self {
             Self::Node(n) => n.len,
