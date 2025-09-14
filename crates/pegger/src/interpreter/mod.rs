@@ -88,7 +88,7 @@ impl PegInterpreterState<'_, '_, '_> {
         let matches = match expr {
             PegExpression::LiteralExact(lit) => {
                 if self.parser.expect(lit) {
-                    self.tree.push_token_node("LITERAL", lit);
+                    self.tree.push_token_node("LITERAL_EXACT", lit);
                     true
                 } else {
                     false
@@ -96,7 +96,7 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::LiteralRange { from, to } => {
                 if let Some(c) = self.parser.eat().filter(|c| from <= c && c <= to) {
-                    self.tree.push_token_node("LITERAL", &c.to_string());
+                    self.tree.push_token_node("LITERAL_RANGE", &c.to_string());
                     true
                 } else {
                     false
@@ -114,7 +114,7 @@ impl PegInterpreterState<'_, '_, '_> {
                         PegCharacterClass::Utf8XidContinue => unicode_id_start::is_id_continue(c),
                     };
                     if res {
-                        self.tree.push_token_node("LITERAL", &c.to_string());
+                        self.tree.push_token_node("LITERAL_CLASS", &c.to_string());
                     }
                     res
                 } else {
@@ -170,7 +170,7 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::Anything => {
                 if let Some(c) = self.parser.eat() {
-                    self.tree.push_token_node("LITERAL", &c.to_string());
+                    self.tree.push_token_node("LITERAL_ANY", &c.to_string());
                     true
                 } else {
                     false

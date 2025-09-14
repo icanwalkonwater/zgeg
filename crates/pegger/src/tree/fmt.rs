@@ -1,4 +1,4 @@
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 
 use super::{ExactParseNodeOrToken, ExactParseTree};
 
@@ -13,7 +13,7 @@ fn write_node<K: Clone + Display>(
     f: &mut Formatter<'_>,
     ident: usize,
 ) -> fmt::Result {
-    writeln!(
+    write!(
         f,
         "{:ident$}{} {}",
         "",
@@ -21,9 +21,15 @@ fn write_node<K: Clone + Display>(
         node.len(),
         ident = ident * 2
     )?;
-    if let ExactParseNodeOrToken::Node(node) = node {
-        for child in &node.children {
-            write_node(child, f, ident + 1)?;
+    match node {
+        ExactParseNodeOrToken::Node(node) => {
+            writeln!(f)?;
+            for child in node.children() {
+                write_node(child, f, ident + 1)?;
+            }
+        }
+        ExactParseNodeOrToken::Token(token) => {
+            writeln!(f, " \"{}\"", token.text.escape_default())?;
         }
     }
     Ok(())
