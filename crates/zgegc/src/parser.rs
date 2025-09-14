@@ -19,6 +19,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         Number, INTEGER, FLOATING,
         STRING,
         Comment, Trivia,
+        LITERAL_SPLITTER, ERROR,
         EOF, EOL,
         DOT, DOTDOT, COMMA, SEMICOLON,
         PLUS, PLUSPLUS, HYPHEN, HYPHENHYPHEN, STAR, STARSTAR, SLASH_F,
@@ -27,6 +28,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         BRACES_L, BRACES_R,
         EOKW, KW,
         FUN,
+
     );
 
     File += star(&Item) + &Trivia + &EOF;
@@ -53,14 +55,17 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     ExprPrefixOp += &PLUS;
     ExprPrefixOp += &HYPHEN;
 
-    FunctionCall += &Ident + &PAREN_L + &PAREN_R;
-    FunctionCall += &Ident + &PAREN_L + &Expr + star(&COMMA + &Expr) + opt(&COMMA) + &PAREN_R;
+    FunctionCall += &Ident + &PAREN_L + opt(&Expr + star(&COMMA + &Expr) + opt(&COMMA)) + &PAREN_R;
 
     // Tokens.
     // They also eat up any trivia right before them so that comments are attached with the thing
     // right after, it makes more sense.
 
-    Ident += &Trivia + not(&KW) + (Utf8XidStart | "_") + star(Utf8XidContinue);
+    Ident += &Trivia
+        + not(&KW)
+        + (class("a-zA-Z_") | (&ERROR + (Utf8XidStart | "_")))
+        + star(class("a-zA-Z0-9_") | (&ERROR + Utf8XidContinue));
+    // Ident += &Trivia + not(&KW) + class("a-zA-Z_") + star(class("a-zA-Z0-9_"));
 
     Number += &INTEGER;
     Number += &FLOATING;
@@ -71,11 +76,17 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     INTEGER += &Trivia + plus(c09()) + not(cazAZ09());
     FLOATING += &Trivia + plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09());
 
-    STRING += &Trivia + "'" + star(not("'") + any()) + "'";
-    STRING += &Trivia + "\"" + star(not("\"") + any()) + "\"";
+    STRING += &Trivia + "'" + &LITERAL_SPLITTER + star(not("'") + any()) + &LITERAL_SPLITTER + "'";
+    STRING +=
+        &Trivia + "\"" + &LITERAL_SPLITTER + star(not("\"") + any()) + &LITERAL_SPLITTER + "\"";
 
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
     Trivia += star(Utf8Whitespace | &Comment);
+
+    // Dummy rule to split tokens into multiple nodes in the parse tree.
+    LITERAL_SPLITTER += eps();
+    // Dummy rule to indicate that there has been a syntax error.
+    ERROR += eps();
 
     EOF += not(any());
     EOL += "\n";
