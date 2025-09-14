@@ -44,7 +44,7 @@ pub fn visit_peg_expression(expr: &mut PegExpression, visitor: &mut impl PegExpr
             visit_peg_expression(pred, visitor);
         }
         Anything => visitor.visit_anything(),
-        Nothing => visitor.visit_nothing(),
+        Epsilon => visitor.visit_nothing(),
     }
 }
 

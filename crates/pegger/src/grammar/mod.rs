@@ -63,7 +63,7 @@ impl PegRule {
         } else {
             Self {
                 name: PegRuleName(name),
-                expr: PegExpression::not_predicate(PegExpression::Nothing),
+                expr: PegExpression::not_predicate(PegExpression::Epsilon),
             }
         }
     }
@@ -98,7 +98,7 @@ pub enum PegExpression {
         positive: bool,
     },
     Anything,
-    Nothing,
+    Epsilon,
 }
 
 impl PegExpression {
@@ -180,8 +180,8 @@ impl PegExpression {
         Self::Anything
     }
 
-    pub fn nothing() -> Self {
-        Self::Nothing
+    pub fn epsilon() -> Self {
+        Self::Epsilon
     }
 
     pub fn simplify(self) -> Self {
@@ -192,12 +192,12 @@ impl PegExpression {
             | Self::LiteralClass(_)
             | Self::Rule(_)
             | Self::Anything
-            | Self::Nothing => self,
+            | Self::Epsilon => self,
             Self::Seq(l, r) => {
                 let l_simplified = l.simplify();
                 let r_simplified = r.simplify();
                 match (l_simplified, r_simplified) {
-                    (Self::Nothing, e) | (e, Self::Nothing) => e,
+                    (Self::Epsilon, e) | (e, Self::Epsilon) => e,
                     (l, r) => Self::seq(l, r),
                 }
             }

@@ -254,7 +254,7 @@ pub use PegCharacterClass::*;
 /// Matches nothing without consuming.
 pub fn eps() -> PegExpressionBuilder {
     PegExpressionBuilder {
-        expr: PegExpression::Nothing,
+        expr: PegExpression::Epsilon,
     }
 }
 

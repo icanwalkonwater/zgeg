@@ -175,7 +175,7 @@ impl PegInterpreterState<'_, '_, '_> {
                     false
                 }
             }
-            PegExpression::Nothing => true,
+            PegExpression::Epsilon => true,
         };
 
         if !matches {

@@ -80,7 +80,7 @@ impl Display for PegExpression {
                 Ok(())
             }
             Self::Anything => write!(f, "."),
-            Self::Nothing => write!(f, "ε"),
+            Self::Epsilon => write!(f, "ε"),
         }
     }
 }
