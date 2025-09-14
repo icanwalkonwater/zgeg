@@ -26,14 +26,14 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         PAREN_L, PAREN_R,
         BRACES_L, BRACES_R,
         EOKW, KW,
-        KW_fun,
+        FUN,
     );
 
     File += star(&Item) + &Trivia + &EOF;
 
     Item += &ItemFunction;
 
-    ItemFunction += &KW_fun + &Ident + &PAREN_L + &PAREN_R + &Block;
+    ItemFunction += &FUN + &Ident + &PAREN_L + &PAREN_R + &Block;
 
     Block += &BRACES_L + star(&Statement) + &BRACES_R;
 
@@ -102,8 +102,8 @@ pub fn make_zgeg_grammar() -> PegGrammar {
 
     // End-of-keyword, helper to avoid issues like "funhello" being matched by `"fun" ident`
     EOKW += not(class("a-zA-Z0-9_"));
-    KW += &KW_fun;
-    KW_fun += &Trivia + "fun" + &EOKW;
+    KW += &FUN;
+    FUN += &Trivia + "fun" + &EOKW;
 
     g.build()
 }
