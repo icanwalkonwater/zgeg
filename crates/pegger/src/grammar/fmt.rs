@@ -20,22 +20,7 @@ impl Display for PegRuleName {
 
 impl Display for PegRule {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:", self.name)?;
-        match self.choices.len() {
-            0 => write!(
-                f,
-                " {}",
-                PegExpression::not_predicate(PegExpression::Nothing)
-            )?,
-            1 => write!(f, " {}", &self.choices[0])?,
-            _ => {
-                for choice in &self.choices {
-                    writeln!(f)?;
-                    write!(f, "  | {choice}")?;
-                }
-            }
-        }
-        Ok(())
+        write!(f, "{}: {}", self.name, self.expr)
     }
 }
 

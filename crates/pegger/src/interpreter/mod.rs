@@ -55,30 +55,22 @@ impl PegInterpreterState<'_, '_, '_> {
             }
         }
 
-        let mut matches = false;
-        for choice in self.grammar.rule(rule).choices() {
-            self.tree.start_node(rule.0);
+        let expr = self.grammar.rule(rule).expr();
 
-            if self.eval_expression(choice) {
-                // Stop at the first match
-                matches = true;
-                break;
-            }
-
-            // Choice failed, trash the subtree and restart
-            self.tree.trash_node();
-            self.parser.reset_to(start);
-        }
-
-        if matches {
+        self.tree.start_node(rule.0);
+        if self.eval_expression(expr) {
+            // Success, finish the subtree and memoize it.
             let end = self.parser.mark();
             let node = self.tree.finish_node();
             self.parser.memoize_match(rule, start, end, node);
+
             true
         } else {
-            // The tree branch has already been thrown out.
-            // The parser as already been reset too.
+            // Failed, trash the subtree and reset the parser.
+            self.tree.trash_node();
+            self.parser.reset_to(start);
             self.parser.memoize_miss(rule, start);
+
             false
         }
     }

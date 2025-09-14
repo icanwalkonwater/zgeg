@@ -42,7 +42,7 @@ pub struct PegRuleName(pub(crate) &'static str);
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegRule {
     name: PegRuleName,
-    choices: Vec<PegExpression>,
+    expr: PegExpression,
 }
 
 impl PegRule {
@@ -51,9 +51,20 @@ impl PegRule {
     }
 
     pub fn multi(name: &'static str, choices: impl IntoIterator<Item = PegExpression>) -> Self {
-        Self {
-            name: PegRuleName(name),
-            choices: choices.into_iter().collect(),
+        let mut choices = choices.into_iter();
+
+        if let Some(first) = choices.next() {
+            let expr = choices.fold(first, |acc, choice| PegExpression::choice(acc, choice));
+
+            Self {
+                name: PegRuleName(name),
+                expr,
+            }
+        } else {
+            Self {
+                name: PegRuleName(name),
+                expr: PegExpression::not_predicate(PegExpression::Nothing),
+            }
         }
     }
 
@@ -61,8 +72,8 @@ impl PegRule {
         self.name
     }
 
-    pub fn choices(&self) -> &[PegExpression] {
-        &self.choices
+    pub fn expr(&self) -> &PegExpression {
+        &self.expr
     }
 }
 

@@ -49,7 +49,5 @@ pub fn visit_peg_expression(expr: &mut PegExpression, visitor: &mut impl PegExpr
 }
 
 pub fn visit_peg_rule(rule: &mut PegRule, visitor: &mut impl PegExpressionVisitor) {
-    for expr in &mut rule.choices {
-        visit_peg_expression(expr, visitor);
-    }
+    visit_peg_expression(&mut rule.expr, visitor);
 }
