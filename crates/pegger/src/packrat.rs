@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 pub struct PackratParser<R = &'static str, D = bool> {
     input: String,
     position: usize,
-    memo: HashMap<(R, PackratMark), Option<(PackratMark, D)>>,
+    memos: HashMap<(R, PackratMark), Option<(PackratMark, D)>>,
 }
 
 impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
@@ -11,7 +11,7 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
         Self {
             input: input.into(),
             position: 0,
-            memo: Default::default(),
+            memos: Default::default(),
         }
     }
 
@@ -38,16 +38,16 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
     }
 
     pub fn memo(&mut self, rule: R, start: PackratMark) -> Option<Option<(PackratMark, D)>> {
-        self.memo.get(&(rule, start)).cloned()
+        self.memos.get(&(rule, start)).cloned()
     }
 
     pub fn memoize_match(&mut self, rule: R, start: PackratMark, end: PackratMark, value: D) {
         assert!(start.0 <= end.0);
-        self.memo.insert((rule, start), Some((end, value)));
+        self.memos.insert((rule, start), Some((end, value)));
     }
 
     pub fn memoize_miss(&mut self, rule: R, start: PackratMark) {
-        self.memo.insert((rule, start), None);
+        self.memos.insert((rule, start), None);
     }
 
     // Utils
