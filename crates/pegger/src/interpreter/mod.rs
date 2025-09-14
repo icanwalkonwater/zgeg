@@ -55,15 +55,18 @@ impl PegInterpreterState<'_, '_, '_> {
             }
         }
 
-        self.tree.start_node(rule.0);
-
         let mut matches = false;
         for choice in self.grammar.rule(rule).choices() {
+            self.tree.start_node(rule.0);
+
             if self.eval_expression(choice) {
                 // Stop at the first match
                 matches = true;
                 break;
             }
+
+            // Choice failed, trash the subtree and restart
+            self.tree.trash_node();
             self.parser.reset_to(start);
         }
 
@@ -73,9 +76,9 @@ impl PegInterpreterState<'_, '_, '_> {
             self.parser.memoize_match(rule, start, end, node);
             true
         } else {
-            self.tree.trash_node();
+            // The tree branch has already been thrown out.
+            // The parser as already been reset too.
             self.parser.memoize_miss(rule, start);
-            self.parser.reset_to(start);
             false
         }
     }
