@@ -57,7 +57,8 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     FunctionCall += &Ident + &PAREN_L + &Expr + star(&COMMA + &Expr) + opt(&COMMA) + &PAREN_R;
 
     // Tokens.
-    // They also eat up any trivia right after them.
+    // They also eat up any trivia right before them so that comments are attached with the thing
+    // right after, it makes more sense.
 
     Ident += &Trivia + not(&KW) + (Utf8XidStart | "_") + star(Utf8XidContinue);
 
@@ -70,8 +71,8 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     INTEGER += &Trivia + plus(c09()) + not(cazAZ09());
     FLOATING += &Trivia + plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09());
 
-    STRING += &Trivia + "'" + star(not(&QUOTE_S) + any()) + "'";
-    STRING += &Trivia + "\"" + star(not(&QUOTE_D) + any()) + "\"";
+    STRING += &Trivia + "'" + star(not("'") + any()) + "'";
+    STRING += &Trivia + "\"" + star(not("\"") + any()) + "\"";
 
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
     Trivia += star(Utf8Whitespace | &Comment);
