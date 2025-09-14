@@ -272,9 +272,7 @@ root: sum
 
 sum: value ("+" value)*
 
-value:
-  | [0-9]+
-  | "(" sum ")"
+value: ([0-9]+ / "(" sum ")")
 "#;
 
         let grammar = make_simple_adder_ref();
