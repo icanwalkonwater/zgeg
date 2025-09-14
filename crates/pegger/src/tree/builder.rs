@@ -11,20 +11,22 @@ pub struct ExactParseTreeBuilder<K> {
     tree: Option<ExactParseTree<K>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct BuilderState<K> {
     kind: K,
     children: Vec<ExactParseNodeOrToken<K>>,
     pending_tokens: String,
-    parenting: bool,
 }
 
 impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
     pub fn push_tokens(&mut self, text: &str) {
         let state = self.current().unwrap();
-        if state.parenting {
-            state.pending_tokens.push_str(text);
-        }
+        state.pending_tokens.push_str(text);
+    }
+
+    pub fn push_token(&mut self, c: char) {
+        let state = self.current().unwrap();
+        state.pending_tokens.push(c);
     }
 
     fn flush_pending_tokens(&mut self) {
@@ -48,7 +50,6 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
             kind,
             children: Default::default(),
             pending_tokens: String::with_capacity(10),
-            parenting: true,
         });
     }
 
@@ -69,11 +70,9 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
         self.flush_pending_tokens();
 
         if let Some(state) = self.current() {
-            if state.parenting {
-                state
-                    .children
-                    .push(ExactParseNodeOrToken::Node(node.clone()));
-            }
+            state
+                .children
+                .push(ExactParseNodeOrToken::Node(node.clone()));
         } else {
             self.tree = Some(ExactParseTree::from_root(node.clone()));
         }
@@ -87,17 +86,26 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
         self.tree.unwrap()
     }
 
-    pub fn pause_parenting(&mut self) {
-        self.current().unwrap().parenting = false;
+    pub fn checkpoint(&mut self) -> Checkpoint<K> {
+        let state = self.current().unwrap();
+        Checkpoint {
+            state: state.clone(),
+        }
     }
 
-    pub fn resume_parenting(&mut self) {
-        self.current().unwrap().parenting = true;
+    pub fn restore_checkpoint(&mut self, checkpoint: Checkpoint<K>) {
+        let state = self.current().unwrap();
+        *state = checkpoint.state;
     }
 
     fn current(&mut self) -> Option<&mut BuilderState<K>> {
         self.stack.last_mut()
     }
+}
+
+#[derive(Clone)]
+pub struct Checkpoint<K> {
+    state: BuilderState<K>,
 }
 
 #[derive(Debug)]
@@ -185,9 +193,9 @@ mod tests {
         builder.start_node("hello");
         builder.push_tokens("a");
         builder.push_tokens("b");
-        builder.pause_parenting();
+        let ck = builder.checkpoint();
         builder.push_tokens("c");
-        builder.resume_parenting();
+        builder.restore_checkpoint(ck);
         builder.push_tokens("de");
         builder.finish_node();
 
@@ -213,12 +221,12 @@ mod tests {
         builder.start_node("hi");
         builder.push_tokens("aa");
         builder.finish_node();
-        builder.pause_parenting();
+        let ck = builder.checkpoint();
         builder.push_tokens("owo");
         builder.start_node("owo");
         builder.push_tokens("uwu");
         builder.finish_node();
-        builder.resume_parenting();
+        builder.restore_checkpoint(ck);
         builder.push_tokens("b");
         builder.finish_node();
 

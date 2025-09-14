@@ -76,7 +76,9 @@ impl PegInterpreterState<'_, '_, '_> {
     }
 
     fn eval_expression(&mut self, expr: &PegExpression) -> bool {
-        let mark = self.parser.mark();
+        let start = self.parser.mark();
+        let tree_checkpoint = self.tree.checkpoint();
+
         let matches = match expr {
             PegExpression::LiteralExact(lit) => {
                 if self.parser.expect(lit) {
@@ -88,7 +90,7 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::LiteralRange { from, to } => {
                 if let Some(c) = self.parser.eat().filter(|c| from <= c && c <= to) {
-                    self.tree.push_tokens(&c.to_string());
+                    self.tree.push_token(c);
                     true
                 } else {
                     false
@@ -106,7 +108,7 @@ impl PegInterpreterState<'_, '_, '_> {
                         PegCharacterClass::Utf8XidContinue => unicode_id_start::is_id_continue(c),
                     };
                     if res {
-                        self.tree.push_tokens(&c.to_string());
+                        self.tree.push_token(c);
                     }
                     res
                 } else {
@@ -119,7 +121,9 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::Choice(first, second) => {
                 if !self.eval_expression(first) {
-                    self.parser.reset_to(mark);
+                    self.parser.reset_to(start);
+                    self.tree.restore_checkpoint(tree_checkpoint.clone());
+
                     self.eval_expression(second)
                 } else {
                     true
@@ -132,9 +136,12 @@ impl PegInterpreterState<'_, '_, '_> {
                 let mut matches = 0;
                 while matches < max {
                     let mark = self.parser.mark();
+                    let tree_checkpoint = self.tree.checkpoint();
+
                     if !self.eval_expression(expr) {
                         // Backtrack the failed match.
                         self.parser.reset_to(mark);
+                        self.tree.restore_checkpoint(tree_checkpoint);
                         break;
                     }
                     matches += 1;
@@ -144,13 +151,13 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::Predicate { expr, positive } => {
                 let mark = self.parser.mark();
-                self.tree.pause_parenting();
+                let tree_checkpoint = self.tree.checkpoint();
 
                 let matches = self.eval_expression(expr);
 
-                // Very ugly way of not counting the lookahead generated nodes.
-                self.tree.resume_parenting();
+                // Always backtrack a predicate.
                 self.parser.reset_to(mark);
+                self.tree.restore_checkpoint(tree_checkpoint);
 
                 // scary shit
                 //   - bitsneak (probably)
@@ -162,7 +169,7 @@ impl PegInterpreterState<'_, '_, '_> {
             }
             PegExpression::Anything => {
                 if let Some(c) = self.parser.eat() {
-                    self.tree.push_tokens(&c.to_string());
+                    self.tree.push_token(c);
                     true
                 } else {
                     false
@@ -172,7 +179,8 @@ impl PegInterpreterState<'_, '_, '_> {
         };
 
         if !matches {
-            self.parser.reset_to(mark);
+            self.parser.reset_to(start);
+            self.tree.restore_checkpoint(tree_checkpoint);
         }
         matches
     }

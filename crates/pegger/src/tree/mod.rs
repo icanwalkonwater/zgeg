@@ -66,7 +66,7 @@ impl ExactParseToken {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExactParseNodeOrToken<K> {
     Node(Arc<ExactParseNode<K>>),
     Token(Arc<ExactParseToken>),
