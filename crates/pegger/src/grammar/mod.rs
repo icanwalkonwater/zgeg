@@ -3,7 +3,8 @@ mod fmt;
 mod simplify;
 mod visit;
 
-use simplify::*;
+pub use simplify::*;
+pub use visit::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegGrammar {
