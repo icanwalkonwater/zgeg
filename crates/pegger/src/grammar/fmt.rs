@@ -24,6 +24,15 @@ impl Display for PegRule {
     }
 }
 
+impl PegExpression {
+    fn is_atomic(&self) -> bool {
+        match self {
+            Self::Seq(_, _) => false,
+            _ => true,
+        }
+    }
+}
+
 impl Display for PegExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {

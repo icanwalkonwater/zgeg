@@ -184,17 +184,6 @@ impl PegExpression {
         Self::Nothing
     }
 
-    pub fn is_epsilon(&self) -> bool {
-        matches!(self, Self::Nothing)
-    }
-
-    pub fn is_atomic(&self) -> bool {
-        match self {
-            Self::Seq(_, _) | Self::Choice(_, _) => false,
-            _ => true,
-        }
-    }
-
     pub fn simplify(self) -> Self {
         match self {
             // These are not simplifyable
