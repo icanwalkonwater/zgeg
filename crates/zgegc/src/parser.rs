@@ -18,7 +18,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         Ident,
         Number, INTEGER, FLOATING,
         STRING,
-        Comment, Trivia,
+        Whitespace, Comment, Trivia,
         LITERAL_SPLITTER, ERROR,
         EOF, EOL,
         DOT, DOTDOT, COMMA, SEMICOLON,
@@ -61,11 +61,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     // They also eat up any trivia right before them so that comments are attached with the thing
     // right after, it makes more sense.
 
-    Ident += &Trivia
-        + not(&KW)
-        + (class("a-zA-Z_") | (&ERROR + (Utf8XidStart | "_")))
-        + star(class("a-zA-Z0-9_") | (&ERROR + Utf8XidContinue));
-    // Ident += &Trivia + not(&KW) + class("a-zA-Z_") + star(class("a-zA-Z0-9_"));
+    Ident += &Trivia + not(&KW) + class("a-zA-Z_") + star(class("a-zA-Z0-9_"));
 
     Number += &INTEGER;
     Number += &FLOATING;
@@ -80,8 +76,9 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     STRING +=
         &Trivia + "\"" + &LITERAL_SPLITTER + star(not("\"") + any()) + &LITERAL_SPLITTER + "\"";
 
+    Whitespace += class(" \t\n\r");
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
-    Trivia += star(Utf8Whitespace | &Comment);
+    Trivia += star(&Whitespace | &Comment);
 
     // Dummy rule to split tokens into multiple nodes in the parse tree.
     LITERAL_SPLITTER += eps();
