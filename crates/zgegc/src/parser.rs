@@ -1,8 +1,8 @@
-use pegger::grammar::PegGrammar;
+use pegme::grammar::PegGrammar;
 
 #[allow(non_snake_case)]
 pub fn make_zgeg_grammar() -> PegGrammar {
-    use pegger::grammar::dsl::*;
+    use pegme::grammar::dsl::*;
 
     let mut g = PegGrammarBuilder::default();
     declare_rules!(g;

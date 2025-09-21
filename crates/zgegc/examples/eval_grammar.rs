@@ -1,4 +1,4 @@
-use pegger::interpreter::parse_with_grammar;
+use pegme::interpreter::parse_with_grammar;
 use zgegc::parser::make_zgeg_grammar;
 
 fn main() {

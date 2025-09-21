@@ -74,7 +74,7 @@ impl PegGrammarBuilder {
 ///
 /// # Example
 /// ```rust
-/// # use pegger::grammar::dsl::*;
+/// # use pegme::grammar::dsl::*;
 /// let mut g = PegGrammarBuilder::default();
 /// declare_rules!(g; root, sum, value);
 ///
