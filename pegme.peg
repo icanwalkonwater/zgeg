@@ -1,0 +1,40 @@
+rule File = Rule* Trivia EOF;
+rule Rule = RuleKind IDENT EQUAL Expr SEMICOLON;
+rule RuleKind = RULE / TOKEN;
+
+rule Expr = ExprChoice;
+rule ExprChoice = ExprSeq (SLASH_F ExprSeq)*;
+rule ExprSeq = ExprPredicate+;
+rule ExprPredicate = (AMPERSAND / EXCLAMATION)? ExprRepeat;
+rule ExprRepeat = ExprAtom RepeatSpec?;
+rule RepeatSpec = STAR / PLUS / BRACES_L INTEGER COLON (INTEGER / STAR) (COLON IDENT)? BRACES_R;
+
+rule ExprAtom = PAREN_L Expr PAREN_R / IDENT / DOT / Keyword / CharacterClass;
+rule Keyword = "\"" ("\\" . / !"\"" .)* "\"";
+rule CharacterClass = Trivia "[" (. "-" !"]" . / !"]" .)* "]";
+
+token IDENT = Trivia !KW [a-zA-Z_] [a-zA-Z0-9_]*;
+token INTEGER = Trivia [0-9] ![a-zA-Z0-9_];
+
+rule Whitespace = [ \t\n\r];
+rule Trivia = Whitespace*;
+
+rule EOF = !.;
+
+rule EOKW = ![a-zA-Z0-9_];
+rule KW = RULE / TOKEN;
+token RULE = Trivia "rule" EOKW;
+token TOKEN = Trivia "token" EOKW;
+
+token EQUAL = Trivia "=";
+token SLASH_F = Trivia "/";
+token AMPERSAND = Trivia "&";
+token EXCLAMATION = Trivia "!";
+token STAR = Trivia "*";
+token PLUS = Trivia "+";
+token COLON = Trivia ",";
+token SEMICOLON = Trivia ";";
+token PAREN_L = Trivia "(";
+token PAREN_R = Trivia ")";
+token BRACES_L = Trivia "{";
+token BRACES_R = Trivia "}";
