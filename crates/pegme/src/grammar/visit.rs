@@ -1,4 +1,6 @@
-use super::{PegCharacterClass, PegExpression, PegRuleName};
+use crate::grammar::PegTerminal;
+
+use super::{PegExpression, PegRuleName};
 
 macro_rules! make_visitors {
     ($visitor_const:ident, $visitor_mut:ident {
@@ -28,9 +30,7 @@ macro_rules! make_visitors {
 make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
     fn visit_expr, visit_expr_mut (v, expr: PegExpression)
         match expr {
-            PegExpression::LiteralExact(kw) => v.visit_literal_keyword(kw),
-            PegExpression::LiteralRange{ from, to } => v.visit_literal_range(from, to),
-            PegExpression::LiteralClass(class) => v.visit_literal_class(class),
+            PegExpression::Terminal(term) => v.visit_terminal(term),
             PegExpression::Rule(rule) => v.visit_rule(rule),
             PegExpression::Seq(left, right) => v.visit_seq(left, right),
             PegExpression::Choice(left, right) => v.visit_choice(left, right),
@@ -40,9 +40,7 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
             PegExpression::Epsilon => v.visit_epsilon(),
         },
         match expr {
-            PegExpression::LiteralExact(kw) => v.visit_literal_keyword_mut(kw),
-            PegExpression::LiteralRange{ from, to } => v.visit_literal_range_mut(from, to),
-            PegExpression::LiteralClass(class) => v.visit_literal_class_mut(class),
+            PegExpression::Terminal(term) => v.visit_terminal_mut(term),
             PegExpression::Rule(rule) => v.visit_rule_mut(rule),
             PegExpression::Seq(left, right) => v.visit_seq_mut(left, right),
             PegExpression::Choice(left, right) => v.visit_choice_mut(left, right),
@@ -52,9 +50,20 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
             PegExpression::Epsilon => v.visit_epsilon_mut(),
         }
 
-    fn visit_literal_keyword, visit_literal_keyword_mut (v, keyword: &'static str) {}, {}
-    fn visit_literal_range, visit_literal_range_mut (v, from: char, to: char) {}, {}
-    fn visit_literal_class, visit_literal_class_mut (v, class: PegCharacterClass) {}, {}
+    fn visit_terminal, visit_terminal_mut (v, terminal: PegTerminal)
+        match terminal {
+            PegTerminal::Exact(lit) => v.visit_terminal_exact(lit),
+            PegTerminal::CharacterClass(ranges) => v.visit_terminal_ranges(&ranges),
+            PegTerminal::PredefinedAscii | PegTerminal::PredefinedUtf8Whitespace | PegTerminal::PredefinedUtf8XidStart | PegTerminal::PredefinedUtf8XidContinue => {},
+        },
+        match terminal {
+            PegTerminal::Exact(lit) => v.visit_terminal_exact_mut(lit),
+            PegTerminal::CharacterClass(ranges) => v.visit_terminal_ranges_mut(ranges),
+            PegTerminal::PredefinedAscii | PegTerminal::PredefinedUtf8Whitespace | PegTerminal::PredefinedUtf8XidStart | PegTerminal::PredefinedUtf8XidContinue => {},
+        }
+
+    fn visit_terminal_exact, visit_terminal_exact_mut (v, lit: &'static str) {}, {}
+    fn visit_terminal_ranges, visit_terminal_ranges_mut (v, ranges: Vec<(char, char)>) {}, {}
     fn visit_rule, visit_rule_mut (v, name: PegRuleName) {}, {}
     fn visit_seq, visit_seq_mut (v, left: PegExpression, right: PegExpression)
         { v.visit_expr(left); v.visit_expr(right); },

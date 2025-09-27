@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    grammar::{PegCharacterClass, PegExpression, PegGrammar, PegRuleName},
+    grammar::{PegExpression, PegGrammar, PegRuleName, PegTerminal},
     packrat::PackratParser,
     tree::{ExactParseNode, ExactParseTree, ExactParseTreeBuilder},
 };
@@ -80,37 +80,52 @@ impl PegInterpreterState<'_, '_, '_> {
         let tree_checkpoint = self.tree.checkpoint();
 
         let matches = match expr {
-            PegExpression::LiteralExact(lit) => {
-                if self.parser.expect(lit) {
+            PegExpression::Terminal(PegTerminal::Exact(lit)) => {
+                let res = self.parser.expect(lit);
+                if res {
                     self.tree.push_tokens(lit);
-                    true
-                } else {
-                    false
                 }
+                res
             }
-            PegExpression::LiteralRange { from, to } => {
-                if let Some(c) = self.parser.eat().filter(|c| from <= c && c <= to) {
+            PegExpression::Terminal(PegTerminal::CharacterClass(ranges)) => {
+                if let Some(c) = self
+                    .parser
+                    .eat_if(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
+                {
                     self.tree.push_token(c);
                     true
                 } else {
                     false
                 }
             }
-            PegExpression::LiteralClass(class) => {
-                if let Some(c) = self.parser.eat() {
-                    let res = match class {
-                        PegCharacterClass::UserDefined(ranges) => {
-                            ranges.iter().any(|[from, to]| *from <= c && c <= *to)
-                        }
-                        PegCharacterClass::Ascii => c.is_ascii(),
-                        PegCharacterClass::Utf8Whitespace => c.is_whitespace(),
-                        PegCharacterClass::Utf8XidStart => unicode_id_start::is_id_start(c),
-                        PegCharacterClass::Utf8XidContinue => unicode_id_start::is_id_continue(c),
-                    };
-                    if res {
-                        self.tree.push_token(c);
-                    }
-                    res
+            PegExpression::Terminal(PegTerminal::PredefinedAscii) => {
+                if let Some(c) = self.parser.eat_if(|c| c.is_ascii()) {
+                    self.tree.push_token(c);
+                    true
+                } else {
+                    false
+                }
+            }
+            PegExpression::Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
+                if let Some(c) = self.parser.eat_if(char::is_whitespace) {
+                    self.tree.push_token(c);
+                    true
+                } else {
+                    false
+                }
+            }
+            PegExpression::Terminal(PegTerminal::PredefinedUtf8XidStart) => {
+                if let Some(c) = self.parser.eat_if(unicode_id_start::is_id_start) {
+                    self.tree.push_token(c);
+                    true
+                } else {
+                    false
+                }
+            }
+            PegExpression::Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
+                if let Some(c) = self.parser.eat_if(unicode_id_start::is_id_continue) {
+                    self.tree.push_token(c);
+                    true
                 } else {
                     false
                 }

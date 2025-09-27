@@ -4,9 +4,9 @@ use std::{
     ops::{Add, AddAssign, BitOr},
 };
 
-use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier};
+use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier, PegTerminal};
 
-use super::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
+use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
@@ -141,10 +141,10 @@ impl CoercableToPegExpression for PegExpressionBuilder {
         self
     }
 }
-impl CoercableToPegExpression for PegCharacterClass {
+impl CoercableToPegExpression for PegTerminal {
     fn into_expr(self) -> PegExpressionBuilder {
         PegExpressionBuilder {
-            expr: PegExpression::LiteralClass(self),
+            expr: PegExpression::Terminal(self),
         }
     }
 }
@@ -210,19 +210,19 @@ impl<R: CoercableToPegExpression> BitOr<R> for &PegGrammarRuleBuilder<'_> {
 
 // Operators for character class.
 
-impl<R: CoercableToPegExpression> Add<R> for PegCharacterClass {
+impl<R: CoercableToPegExpression> Add<R> for PegTerminal {
     type Output = PegExpressionBuilder;
     fn add(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::class(self), rhs.into_expr().expr),
+            expr: PegExpression::seq(PegExpression::Terminal(self), rhs.into_expr().expr),
         }
     }
 }
-impl<R: CoercableToPegExpression> BitOr<R> for PegCharacterClass {
+impl<R: CoercableToPegExpression> BitOr<R> for PegTerminal {
     type Output = PegExpressionBuilder;
     fn bitor(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::choice(PegExpression::class(self), rhs.into_expr().expr),
+            expr: PegExpression::choice(PegExpression::Terminal(self), rhs.into_expr().expr),
         }
     }
 }
@@ -256,7 +256,10 @@ impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for [char; 2], b
 // Helpers for common expressions.
 
 // Expose character classes
-pub use PegCharacterClass::*;
+pub use PegTerminal::{
+    PredefinedAscii as Ascii, PredefinedUtf8Whitespace as Utf8Whitespace,
+    PredefinedUtf8XidContinue as Utf8XidContinue, PredefinedUtf8XidStart as Utf8XidStart,
+};
 
 /// Matches nothing without consuming.
 pub fn eps() -> PegExpressionBuilder {
@@ -306,6 +309,8 @@ pub fn class(class: &'static str) -> PegExpressionBuilder {
     let mut iter = class.chars().peekable();
     let mut classes = Vec::new();
 
+    // Small parser for character ranges.
+    // `[a-z01]` expands to `vec![(a, z), (0, 0), (1, 1)]`.
     loop {
         let Some(c) = iter.next() else {
             break;
@@ -316,14 +321,14 @@ pub fn class(class: &'static str) -> PegExpressionBuilder {
             // Its a range
             iter.next().unwrap();
             let end = iter.next().unwrap();
-            classes.push([c, end]);
+            classes.push((c, end));
         } else {
             // Its not a range
-            classes.push([c, c]);
+            classes.push((c, c));
         }
     }
 
     PegExpressionBuilder {
-        expr: PegExpression::class(PegCharacterClass::UserDefined(classes)),
+        expr: PegExpression::ranges(classes),
     }
 }

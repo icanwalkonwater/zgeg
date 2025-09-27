@@ -29,6 +29,10 @@ impl PegGrammar {
         Ok(Self { rules })
     }
 
+    pub fn rule_names(&self) -> Vec<PegRuleName> {
+        self.rules.iter().map(|r| r.name).collect()
+    }
+
     pub fn rule_by_name(&self, name: &'static str) -> &PegRule {
         self.rule(PegRuleName(name))
     }
@@ -81,12 +85,7 @@ impl PegRule {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PegExpression {
-    LiteralExact(&'static str),
-    LiteralRange {
-        from: char,
-        to: char,
-    },
-    LiteralClass(PegCharacterClass),
+    Terminal(PegTerminal),
     Rule(PegRuleName),
     Seq(Box<PegExpression>, Box<PegExpression>),
     Choice(Box<PegExpression>, Box<PegExpression>),
@@ -103,17 +102,43 @@ pub enum PegExpression {
     Epsilon,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PegTerminal {
+    Exact(&'static str),
+    CharacterClass(Vec<(char, char)>),
+    PredefinedAscii,
+    PredefinedUtf8Whitespace,
+    PredefinedUtf8XidStart,
+    PredefinedUtf8XidContinue,
+}
+
 impl PegExpression {
     pub fn exact(kw: &'static str) -> Self {
-        Self::LiteralExact(kw)
+        Self::Terminal(PegTerminal::Exact(kw))
     }
 
     pub fn range(from: char, to: char) -> Self {
-        Self::LiteralRange { from, to }
+        Self::Terminal(PegTerminal::CharacterClass(vec![(from, to)]))
     }
 
-    pub fn class(class: PegCharacterClass) -> Self {
-        Self::LiteralClass(class)
+    pub fn ranges(ranges: Vec<(char, char)>) -> Self {
+        Self::Terminal(PegTerminal::CharacterClass(ranges))
+    }
+
+    pub fn any_ascii() -> Self {
+        Self::Terminal(PegTerminal::PredefinedAscii)
+    }
+
+    pub fn any_utf8_whitespace() -> Self {
+        Self::Terminal(PegTerminal::PredefinedUtf8Whitespace)
+    }
+
+    pub fn any_utf8_xid_start() -> Self {
+        Self::Terminal(PegTerminal::PredefinedUtf8XidStart)
+    }
+
+    pub fn any_utf8_xid_continue() -> Self {
+        Self::Terminal(PegTerminal::PredefinedUtf8XidContinue)
     }
 
     pub fn rule(name: &'static str) -> Self {
@@ -187,15 +212,6 @@ impl PegExpression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PegCharacterClass {
-    UserDefined(Vec<[char; 2]>),
-    Ascii,
-    Utf8Whitespace,
-    Utf8XidStart,
-    Utf8XidContinue,
-}
-
 #[cfg(test)]
 mod tests {
     use super::{PegExpression, PegGrammar, PegRule};
@@ -208,7 +224,7 @@ mod tests {
                 PegExpression::seq(
                     PegExpression::rule("value"),
                     PegExpression::zero_or_more(PegExpression::seq(
-                        PegExpression::LiteralExact("+"),
+                        PegExpression::exact("+"),
                         PegExpression::rule("value"),
                     )),
                 ),
@@ -216,12 +232,9 @@ mod tests {
             PegRule::multi(
                 "value",
                 [
-                    PegExpression::one_or_more(PegExpression::LiteralRange { from: '0', to: '9' }),
+                    PegExpression::one_or_more(PegExpression::range('0', '9')),
                     PegExpression::seq(
-                        PegExpression::seq(
-                            PegExpression::LiteralExact("("),
-                            PegExpression::rule("sum"),
-                        ),
+                        PegExpression::seq(PegExpression::exact("("), PegExpression::rule("sum")),
                         PegExpression::exact(")"),
                     ),
                 ],

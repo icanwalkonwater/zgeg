@@ -1,6 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
-use super::{PegCharacterClass, PegExpression, PegGrammar, PegRule, PegRuleName};
+use crate::grammar::PegTerminal;
+
+use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
 
 impl Display for PegGrammar {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -36,21 +38,7 @@ impl PegExpression {
 impl Display for PegExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::LiteralExact(r) => {
-                write!(f, "\"")?;
-                for c in r.chars() {
-                    write_char_escaped(f, c)?;
-                }
-                write!(f, "\"")
-            }
-            Self::LiteralRange { from, to } => {
-                write!(f, "[")?;
-                write_char_escaped(f, *from)?;
-                write!(f, "-")?;
-                write_char_escaped(f, *to)?;
-                write!(f, "]")
-            }
-            Self::LiteralClass(cls) => write!(f, "{cls}"),
+            Self::Terminal(t) => write!(f, "{t}"),
             Self::Rule(nt) => write!(f, "{}", nt),
             Self::Seq(l, r) => write!(f, "{l} {r}"),
             Self::Choice(l, r) => write!(f, "({l} / {r})"),
@@ -85,21 +73,33 @@ impl Display for PegExpression {
     }
 }
 
-impl Display for PegCharacterClass {
+impl Display for PegTerminal {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UserDefined(classes) => {
+            Self::Exact(lit) => {
+                write!(f, "\"")?;
+                for c in lit.chars() {
+                    write_char_escaped(f, c)?;
+                }
+                write!(f, "\"")
+            }
+            Self::CharacterClass(ranges) => {
                 write!(f, "[")?;
-                for class in classes {
-                    if class[0] == class[1] {
-                        write!(f, "{}", class[0])?;
+                for &(from, to) in ranges {
+                    if from == to {
+                        write_char_escaped(f, from)?;
                     } else {
-                        write!(f, "{}-{}", class[0], class[1])?;
+                        write_char_escaped(f, from)?;
+                        write!(f, "-")?;
+                        write_char_escaped(f, to)?;
                     }
                 }
                 write!(f, "]")
             }
-            _ => write!(f, "[:{self:?}:]"),
+            Self::PredefinedAscii => write!(f, "[:Ascii:]"),
+            Self::PredefinedUtf8Whitespace => write!(f, "[:Utf8Whitespace:]"),
+            Self::PredefinedUtf8XidStart => write!(f, "[:Utf8XidStart:]"),
+            Self::PredefinedUtf8XidContinue => write!(f, "[:Utf8XidContinue:]"),
         }
     }
 }

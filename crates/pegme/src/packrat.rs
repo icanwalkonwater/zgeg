@@ -52,6 +52,10 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
 
     // Utils
 
+    pub fn eat_if(&mut self, cond: impl FnOnce(char) -> bool) -> Option<char> {
+        self.eat().filter(|c| cond(*c))
+    }
+
     pub fn expect(&mut self, lit: &str) -> bool {
         if self.input[self.position..].starts_with(lit) {
             self.position += lit.len();
