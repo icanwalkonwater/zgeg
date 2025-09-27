@@ -1,16 +1,15 @@
+use indexmap::IndexMap;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     ops::{Add, AddAssign, BitOr},
 };
 
-use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier, PegTerminal};
-
 use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
+use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier, PegTerminal};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
-    rules: HashMap<PegRuleName, RefCell<Vec<PegExpression>>>,
+    rules: IndexMap<PegRuleName, RefCell<Vec<PegExpression>>>,
 }
 
 impl PegGrammarBuilder {
@@ -29,7 +28,7 @@ impl PegGrammarBuilder {
     pub fn rules<const N: usize>(
         &mut self,
         names: [&'static str; N],
-    ) -> [PegGrammarRuleBuilder; N] {
+    ) -> [PegGrammarRuleBuilder<'_>; N] {
         let names = names.map(PegRuleName);
 
         for n in names {
