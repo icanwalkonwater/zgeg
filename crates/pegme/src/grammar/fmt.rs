@@ -40,6 +40,13 @@ impl Display for PegExpression {
         match self {
             Self::Terminal(t) => write!(f, "{t}"),
             Self::Rule(nt) => write!(f, "{}", nt),
+            Self::Named(name, e) => {
+                write!(f, "{name}@")?;
+                match e.is_atomic() {
+                    true => write!(f, "{e}"),
+                    false => write!(f, "({e})"),
+                }
+            }
             Self::Seq(l, r) => write!(f, "{l} {r}"),
             Self::Choice(l, r) => write!(f, "({l} / {r})"),
             Self::Repetition { expr: e, min, max } => {

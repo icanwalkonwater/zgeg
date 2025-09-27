@@ -133,6 +133,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Rule(rule) => self.eval_nonterminal(*rule),
+            PegExpression::Named(_name, expr) => self.eval_expression(expr),
             PegExpression::Seq(first, second) => {
                 self.eval_expression(first) && self.eval_expression(second)
             }

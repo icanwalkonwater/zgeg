@@ -269,6 +269,12 @@ pub fn any() -> PegExpressionBuilder {
     }
 }
 
+pub fn named(name: &'static str, expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
+    PegExpressionBuilder {
+        expr: PegExpression::named(name, expr.into_expr().expr),
+    }
+}
+
 pub fn star(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
     PegExpressionBuilder {
         expr: PegExpression::zero_or_more(expr.into_expr().expr),

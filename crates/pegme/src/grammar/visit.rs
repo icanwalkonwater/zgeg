@@ -32,6 +32,7 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
         match expr {
             PegExpression::Terminal(term) => v.visit_terminal(term),
             PegExpression::Rule(rule) => v.visit_rule(rule),
+            PegExpression::Named(name, expr) => v.visit_named(name, expr),
             PegExpression::Seq(left, right) => v.visit_seq(left, right),
             PegExpression::Choice(left, right) => v.visit_choice(left, right),
             PegExpression::Repetition { expr, min, max } => v.visit_repetition(expr, min, max),
@@ -42,6 +43,7 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
         match expr {
             PegExpression::Terminal(term) => v.visit_terminal_mut(term),
             PegExpression::Rule(rule) => v.visit_rule_mut(rule),
+            PegExpression::Named(name, expr) => v.visit_named_mut(name, expr),
             PegExpression::Seq(left, right) => v.visit_seq_mut(left, right),
             PegExpression::Choice(left, right) => v.visit_choice_mut(left, right),
             PegExpression::Repetition { expr, min, max } => v.visit_repetition_mut(expr, min, max),
@@ -65,6 +67,9 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
     fn visit_terminal_exact, visit_terminal_exact_mut (v, lit: &'static str) {}, {}
     fn visit_terminal_ranges, visit_terminal_ranges_mut (v, ranges: Vec<(char, char)>) {}, {}
     fn visit_rule, visit_rule_mut (v, name: PegRuleName) {}, {}
+    fn visit_named, visit_named_mut (v, name: &'static str, expr: PegExpression)
+        { v.visit_expr(expr); },
+        { v.visit_expr_mut(expr); }
     fn visit_seq, visit_seq_mut (v, left: PegExpression, right: PegExpression)
         { v.visit_expr(left); v.visit_expr(right); },
         { v.visit_expr_mut(left); v.visit_expr_mut(right); }

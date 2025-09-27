@@ -65,6 +65,7 @@ impl PegRule {
 pub enum PegExpression {
     Terminal(PegTerminal),
     Rule(PegRuleName),
+    Named(&'static str, Box<PegExpression>),
     Seq(Box<PegExpression>, Box<PegExpression>),
     Choice(Box<PegExpression>, Box<PegExpression>),
     Repetition {
@@ -121,6 +122,10 @@ impl PegExpression {
 
     pub fn rule(name: &'static str) -> Self {
         Self::Rule(PegRuleName(name))
+    }
+
+    pub fn named(name: &'static str, expr: impl Into<Box<PegExpression>>) -> Self {
+        Self::Named(name, expr.into())
     }
 
     pub fn seq(left: impl Into<Box<PegExpression>>, right: impl Into<Box<PegExpression>>) -> Self {
