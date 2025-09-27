@@ -4,5 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+indexmap.workspace = true
 unicode-id-start.workspace = true
 pretty_assertions.workspace = true

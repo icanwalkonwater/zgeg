@@ -3,18 +3,17 @@ mod fmt;
 mod simplify;
 mod visit;
 
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 pub use simplify::*;
 pub use visit::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegGrammar {
-    rules: HashMap<PegRuleName, PegRule>,
+    rules: IndexMap<PegRuleName, PegRule>,
 }
 
 impl PegGrammar {
-    pub fn new(rules: HashMap<PegRuleName, PegRule>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(rules: IndexMap<PegRuleName, PegRule>) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self { rules })
     }
 
