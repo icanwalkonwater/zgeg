@@ -6,9 +6,9 @@ use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
 
 impl Display for PegGrammar {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for n in &self.rules {
-            writeln!(f, "{}", n)?;
-            writeln!(f)?;
+        for (name, rule) in &self.rules {
+            writeln!(f, "{name}: {rule}")?;
+            writeln!(f);
         }
         Ok(())
     }
@@ -22,7 +22,7 @@ impl Display for PegRuleName {
 
 impl Display for PegRule {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.name, self.expr)
+        write!(f, "{}", self.expr)
     }
 }
 

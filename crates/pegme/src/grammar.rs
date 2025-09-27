@@ -3,34 +3,23 @@ mod fmt;
 mod simplify;
 mod visit;
 
+use std::collections::HashMap;
+
 pub use simplify::*;
 pub use visit::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegGrammar {
-    rules: Vec<PegRule>,
+    rules: HashMap<PegRuleName, PegRule>,
 }
 
 impl PegGrammar {
-    pub fn new(
-        rules: impl IntoIterator<Item = PegRule>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let rules = rules.into_iter().collect::<Vec<_>>();
-
-        let mut names = rules.iter().map(|nt| nt.name.0).collect::<Vec<_>>();
-        names.sort_unstable();
-        names.dedup();
-        if names.len() != rules.len() {
-            return Err(
-                "Found duplicated non terminals names, use an ordered choice instead".into(),
-            );
-        }
-
+    pub fn new(rules: HashMap<PegRuleName, PegRule>) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self { rules })
     }
 
     pub fn rule_names(&self) -> Vec<PegRuleName> {
-        self.rules.iter().map(|r| r.name).collect()
+        self.rules.keys().copied().collect()
     }
 
     pub fn rule_by_name(&self, name: &'static str) -> &PegRule {
@@ -38,7 +27,7 @@ impl PegGrammar {
     }
 
     pub fn rule(&self, name: PegRuleName) -> &PegRule {
-        self.rules.iter().find(|r| r.name == name).unwrap()
+        &self.rules[&name]
     }
 }
 
@@ -47,35 +36,24 @@ pub struct PegRuleName(pub(crate) &'static str);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegRule {
-    name: PegRuleName,
     expr: PegExpression,
 }
 
 impl PegRule {
-    pub fn simple(name: &'static str, expr: PegExpression) -> Self {
-        Self::multi(name, [expr])
+    pub fn simple(expr: PegExpression) -> Self {
+        Self { expr }
     }
 
-    pub fn multi(name: &'static str, choices: impl IntoIterator<Item = PegExpression>) -> Self {
+    pub fn multi(choices: impl IntoIterator<Item = PegExpression>) -> Self {
         let mut choices = choices.into_iter();
 
         if let Some(first) = choices.next() {
             let expr = choices.fold(first, |acc, choice| PegExpression::choice(acc, choice));
 
-            Self {
-                name: PegRuleName(name),
-                expr,
-            }
+            Self::simple(expr)
         } else {
-            Self {
-                name: PegRuleName(name),
-                expr: PegExpression::not_predicate(PegExpression::Epsilon),
-            }
+            Self::simple(PegExpression::not_predicate(PegExpression::Epsilon))
         }
-    }
-
-    pub fn name(&self) -> PegRuleName {
-        self.name
     }
 
     pub fn expr(&self) -> &PegExpression {
@@ -214,32 +192,42 @@ impl PegExpression {
 
 #[cfg(test)]
 mod tests {
+    use crate::grammar::PegRuleName;
+
     use super::{PegExpression, PegGrammar, PegRule};
 
     fn make_simple_adder_ref() -> PegGrammar {
-        PegGrammar::new([
-            PegRule::simple("root", PegExpression::rule("sum")),
-            PegRule::simple(
-                "sum",
-                PegExpression::seq(
-                    PegExpression::rule("value"),
-                    PegExpression::zero_or_more(PegExpression::seq(
-                        PegExpression::exact("+"),
+        PegGrammar::new(
+            [
+                ("root", PegRule::simple(PegExpression::rule("sum"))),
+                (
+                    "sum",
+                    PegRule::simple(PegExpression::seq(
                         PegExpression::rule("value"),
+                        PegExpression::zero_or_more(PegExpression::seq(
+                            PegExpression::exact("+"),
+                            PegExpression::rule("value"),
+                        )),
                     )),
                 ),
-            ),
-            PegRule::multi(
-                "value",
-                [
-                    PegExpression::one_or_more(PegExpression::range('0', '9')),
-                    PegExpression::seq(
-                        PegExpression::seq(PegExpression::exact("("), PegExpression::rule("sum")),
-                        PegExpression::exact(")"),
-                    ),
-                ],
-            ),
-        ])
+                (
+                    "value",
+                    PegRule::multi([
+                        PegExpression::one_or_more(PegExpression::range('0', '9')),
+                        PegExpression::seq(
+                            PegExpression::seq(
+                                PegExpression::exact("("),
+                                PegExpression::rule("sum"),
+                            ),
+                            PegExpression::exact(")"),
+                        ),
+                    ]),
+                ),
+            ]
+            .into_iter()
+            .map(|(n, r)| (PegRuleName(n), r))
+            .collect(),
+        )
         .unwrap()
     }
 

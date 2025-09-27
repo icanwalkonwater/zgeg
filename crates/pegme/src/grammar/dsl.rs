@@ -10,7 +10,6 @@ use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
 
 #[derive(Default)]
 pub struct PegGrammarBuilder {
-    names: Vec<PegRuleName>,
     rules: HashMap<PegRuleName, RefCell<Vec<PegExpression>>>,
 }
 
@@ -20,7 +19,6 @@ impl PegGrammarBuilder {
         let name = PegRuleName(name);
         let prev = self.rules.insert(name, RefCell::new(vec![]));
         assert!(prev.is_none());
-        self.names.push(name);
 
         PegGrammarRuleBuilder {
             builder: self,
@@ -37,7 +35,6 @@ impl PegGrammarBuilder {
         for n in names {
             let prev = self.rules.insert(n, RefCell::new(Vec::new()));
             assert!(prev.is_none());
-            self.names.push(n);
         }
         names.map(|name| PegGrammarRuleBuilder {
             builder: &*self,
@@ -49,22 +46,19 @@ impl PegGrammarBuilder {
         self.rules[&name].borrow_mut().push(expr);
     }
 
-    pub fn build(mut self) -> PegGrammar {
-        assert_eq!(self.names.len(), self.rules.len());
-        let mut rules = self
-            .names
+    pub fn build(self) -> PegGrammar {
+        let rules = self
+            .rules
             .into_iter()
-            .map(|name| {
-                let v = self.rules.remove(&name).unwrap();
-                (name, v)
-            })
-            .map(|(name, expr)| PegRule::multi(name.0, expr.into_inner()))
-            .collect::<Vec<_>>();
+            .map(|(name, exprs)| {
+                let mut rule = PegRule::multi(exprs.into_inner());
 
-        // Simplify expressions.
-        for rule in &mut rules {
-            PegExpressionSimplifier.visit_expr_mut(&mut rule.expr);
-        }
+                // Simplify rule.
+                PegExpressionSimplifier.visit_expr_mut(&mut rule.expr);
+
+                (name, rule)
+            })
+            .collect();
 
         PegGrammar::new(rules).unwrap()
     }
