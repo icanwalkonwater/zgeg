@@ -90,7 +90,7 @@ impl Display for PegTerminal {
                 }
                 write!(f, "\"")
             }
-            Self::CharacterClass(ranges) => {
+            Self::CharacterRanges(ranges) => {
                 write!(f, "[")?;
                 for &(from, to) in ranges {
                     if from == to {

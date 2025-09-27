@@ -1,9 +1,10 @@
+use indexmap::IndexMap;
+
 pub mod dsl;
 mod fmt;
 mod simplify;
 mod visit;
 
-use indexmap::IndexMap;
 pub use simplify::*;
 pub use visit::*;
 
@@ -83,7 +84,7 @@ pub enum PegExpression {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PegTerminal {
     Exact(&'static str),
-    CharacterClass(Vec<(char, char)>),
+    CharacterRanges(Vec<(char, char)>),
     PredefinedAscii,
     PredefinedUtf8Whitespace,
     PredefinedUtf8XidStart,
@@ -96,11 +97,11 @@ impl PegExpression {
     }
 
     pub fn range(from: char, to: char) -> Self {
-        Self::Terminal(PegTerminal::CharacterClass(vec![(from, to)]))
+        Self::Terminal(PegTerminal::CharacterRanges(vec![(from, to)]))
     }
 
     pub fn ranges(ranges: Vec<(char, char)>) -> Self {
-        Self::Terminal(PegTerminal::CharacterClass(ranges))
+        Self::Terminal(PegTerminal::CharacterRanges(ranges))
     }
 
     pub fn any_ascii() -> Self {

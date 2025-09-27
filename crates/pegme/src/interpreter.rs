@@ -89,7 +89,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
                 res
             }
-            PegExpression::Terminal(PegTerminal::CharacterClass(ranges)) => {
+            PegExpression::Terminal(PegTerminal::CharacterRanges(ranges)) => {
                 if let Some(c) = self
                     .parser
                     .eat_if(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))

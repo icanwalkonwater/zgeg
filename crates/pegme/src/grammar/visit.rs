@@ -55,12 +55,12 @@ make_visitors!(PegExpressionVisitor, PegExpressionVisitorMut {
     fn visit_terminal, visit_terminal_mut (v, terminal: PegTerminal)
         match terminal {
             PegTerminal::Exact(lit) => v.visit_terminal_exact(lit),
-            PegTerminal::CharacterClass(ranges) => v.visit_terminal_ranges(&ranges),
+            PegTerminal::CharacterRanges(ranges) => v.visit_terminal_ranges(&ranges),
             PegTerminal::PredefinedAscii | PegTerminal::PredefinedUtf8Whitespace | PegTerminal::PredefinedUtf8XidStart | PegTerminal::PredefinedUtf8XidContinue => {},
         },
         match terminal {
             PegTerminal::Exact(lit) => v.visit_terminal_exact_mut(lit),
-            PegTerminal::CharacterClass(ranges) => v.visit_terminal_ranges_mut(ranges),
+            PegTerminal::CharacterRanges(ranges) => v.visit_terminal_ranges_mut(ranges),
             PegTerminal::PredefinedAscii | PegTerminal::PredefinedUtf8Whitespace | PegTerminal::PredefinedUtf8XidStart | PegTerminal::PredefinedUtf8XidContinue => {},
         }
 
