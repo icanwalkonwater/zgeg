@@ -6,7 +6,7 @@ use crate::{
     packrat::PackratParser,
 };
 
-mod v2;
+pub mod v2;
 
 pub fn parse_with_grammar(
     g: &PegGrammar,

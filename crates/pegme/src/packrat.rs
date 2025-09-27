@@ -64,9 +64,16 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
             false
         }
     }
+
+    pub fn eat_up_to(&mut self, mark: PackratMark) -> &str {
+        assert!(self.position <= mark.0);
+        let prev_position = self.position;
+        self.reset_to(mark);
+        &self.input[prev_position..mark.0]
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub struct PackratMark(usize);
 
 impl PackratMark {

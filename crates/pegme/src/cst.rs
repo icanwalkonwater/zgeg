@@ -9,7 +9,7 @@ pub enum ConcreteSyntaxTree<K> {
     Node {
         kind: K,
         len: usize,
-        children: Vec<Arc<ConcreteSyntaxTree<K>>>,
+        children: Arc<[Arc<ConcreteSyntaxTree<K>>]>,
     },
     Leaf {
         text: Arc<str>,
@@ -30,7 +30,7 @@ impl<K> ConcreteSyntaxTree<K> {
         Self::Node {
             kind,
             len,
-            children,
+            children: children.into(),
         }
     }
 

@@ -20,7 +20,7 @@ fn write_node<K: Clone + Display>(
             children,
         } => {
             writeln!(f, "{:ident$}{kind} {len}", "", ident = ident * 2)?;
-            for child in children {
+            for child in children.iter() {
                 write_node(child, f, ident + 1)?;
             }
         }

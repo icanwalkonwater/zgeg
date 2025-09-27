@@ -79,6 +79,7 @@ impl<K: Clone + Eq + Hash> ConcreteSyntaxTreeBuilder<K> {
     }
 
     pub fn build(self) -> Arc<ConcreteSyntaxTree<K>> {
+        // TODO: assert no cycles
         self.tree.unwrap()
     }
 
