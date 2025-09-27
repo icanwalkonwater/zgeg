@@ -3,7 +3,7 @@ use std::{borrow::Borrow, collections::HashSet, hash::Hash};
 use super::*;
 
 #[derive(Debug, Default)]
-pub struct ExactParseTreeBuilder<K> {
+pub struct ConcreteSyntaxTreeBuilder<K> {
     interner_trees: Interner<ConcreteSyntaxTree<K>>,
     interner_text: Interner<str>,
     stack: Vec<BuilderState<K>>,
@@ -17,7 +17,7 @@ struct BuilderState<K> {
     pending_tokens: String,
 }
 
-impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
+impl<K: Clone + Eq + Hash> ConcreteSyntaxTreeBuilder<K> {
     pub fn push_tokens(&mut self, text: &str) {
         let state = self.current().unwrap();
         state.pending_tokens.push_str(text);
@@ -137,11 +137,11 @@ impl<T: Eq + Hash + ?Sized> Interner<T> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::cst::{ConcreteSyntaxTree, ExactParseTreeBuilder};
+    use crate::cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder};
 
     #[test]
     fn simple() {
-        let mut builder = ExactParseTreeBuilder::default();
+        let mut builder = ConcreteSyntaxTreeBuilder::default();
 
         builder.start_node("hello");
         builder.start_node("hi");
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn token_concat() {
-        let mut builder = ExactParseTreeBuilder::default();
+        let mut builder = ConcreteSyntaxTreeBuilder::default();
 
         builder.start_node("hello");
         builder.push_tokens("a");
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn skip_some() {
-        let mut builder = ExactParseTreeBuilder::default();
+        let mut builder = ConcreteSyntaxTreeBuilder::default();
 
         builder.start_node("hello");
         builder.start_node("hi");
