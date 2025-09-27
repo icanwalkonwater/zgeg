@@ -8,7 +8,7 @@ impl Display for PegGrammar {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         for (name, rule) in &self.rules {
             writeln!(f, "{name}: {rule}")?;
-            writeln!(f);
+            writeln!(f)?;
         }
         Ok(())
     }

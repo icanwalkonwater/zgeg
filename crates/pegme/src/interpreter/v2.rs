@@ -20,8 +20,7 @@ pub fn parse_with_grammar(
     };
 
     // This also initializes the packrat memos.
-    let rule = g.rule(PegRuleName(root));
-    let matches = state.test_expression(rule.expr());
+    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root)));
 
     if !matches {
         println!("No match");
@@ -40,6 +39,7 @@ struct InterpreterState<'g> {
     tree: ConcreteSyntaxTreeBuilder<&'static str>,
 }
 
+#[derive(Debug)]
 struct ScavengeReport {
     named_nodes: Vec<(PegRuleName, PackratMark, PackratMark)>,
 }
@@ -53,19 +53,18 @@ impl InterpreterState<'_> {
         let (end, _) = self.parser.memo(name, start).unwrap().unwrap();
 
         let report = self.scavenge_rule(name);
+        dbg!(&report);
 
         assert!(
             report.named_nodes.iter().all(|(_, s, e)| s <= e),
             "Scavenger returned nonsensical marks"
         );
-        assert!(
-            report
-                .named_nodes
-                .iter()
-                .tuple_windows()
-                .all(|((_, _, left), (_, right, _))| left <= right),
-            "Scout returned marks that aren't consecutive"
-        );
+        for ((_, _, left), (_, right, _)) in report.named_nodes.iter().tuple_windows() {
+            assert!(
+                left <= right,
+                "Scout return marks that aren't consecutive: {left:?} > {right:?}"
+            );
+        }
 
         self.parser.reset_to(start);
 
@@ -182,7 +181,7 @@ impl InterpreterState<'_> {
                 // This is just a noop, we know it matches and there is nothing to scavenge.
             }
             Anything => {
-                self.parser.eat();
+                self.parser.anything();
             }
             Epsilon => {}
         }
@@ -195,21 +194,18 @@ impl InterpreterState<'_> {
             Terminal(PegTerminal::Exact(lit)) => self.parser.expect(lit),
             Terminal(PegTerminal::CharacterRanges(ranges)) => self
                 .parser
-                .eat_if(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
+                .eat(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
                 .is_some(),
-            Terminal(PegTerminal::PredefinedAscii) => {
-                self.parser.eat_if(|c| c.is_ascii()).is_some()
-            }
+            Terminal(PegTerminal::PredefinedAscii) => self.parser.eat(|c| c.is_ascii()).is_some(),
             Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
-                self.parser.eat_if(char::is_whitespace).is_some()
+                self.parser.eat(char::is_whitespace).is_some()
             }
             Terminal(PegTerminal::PredefinedUtf8XidStart) => {
-                self.parser.eat_if(unicode_id_start::is_id_start).is_some()
+                self.parser.eat(unicode_id_start::is_id_start).is_some()
             }
-            Terminal(PegTerminal::PredefinedUtf8XidContinue) => self
-                .parser
-                .eat_if(unicode_id_start::is_id_continue)
-                .is_some(),
+            Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
+                self.parser.eat(unicode_id_start::is_id_continue).is_some()
+            }
             Rule(name) => {
                 let start = self.parser.mark();
 
@@ -222,7 +218,7 @@ impl InterpreterState<'_> {
                         let matches = self.test_expression(rule.expr());
 
                         if matches {
-                            dbg!(name);
+                            println!("Memoize match {name} at {start:?}");
                             self.parser
                                 .memoize_match(*name, start, self.parser.mark(), ());
                             true
@@ -290,7 +286,7 @@ impl InterpreterState<'_> {
 
                 matches == *positive
             }
-            Anything => self.parser.eat().is_some(),
+            Anything => self.parser.anything().is_some(),
             Epsilon => true,
         }
     }

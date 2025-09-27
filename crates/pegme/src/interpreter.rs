@@ -92,7 +92,7 @@ impl PegInterpreterState<'_, '_, '_> {
             PegExpression::Terminal(PegTerminal::CharacterRanges(ranges)) => {
                 if let Some(c) = self
                     .parser
-                    .eat_if(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
+                    .eat(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
                 {
                     self.tree.push_token(c);
                     true
@@ -101,7 +101,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Terminal(PegTerminal::PredefinedAscii) => {
-                if let Some(c) = self.parser.eat_if(|c| c.is_ascii()) {
+                if let Some(c) = self.parser.eat(|c| c.is_ascii()) {
                     self.tree.push_token(c);
                     true
                 } else {
@@ -109,7 +109,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
-                if let Some(c) = self.parser.eat_if(char::is_whitespace) {
+                if let Some(c) = self.parser.eat(char::is_whitespace) {
                     self.tree.push_token(c);
                     true
                 } else {
@@ -117,7 +117,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Terminal(PegTerminal::PredefinedUtf8XidStart) => {
-                if let Some(c) = self.parser.eat_if(unicode_id_start::is_id_start) {
+                if let Some(c) = self.parser.eat(unicode_id_start::is_id_start) {
                     self.tree.push_token(c);
                     true
                 } else {
@@ -125,7 +125,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
-                if let Some(c) = self.parser.eat_if(unicode_id_start::is_id_continue) {
+                if let Some(c) = self.parser.eat(unicode_id_start::is_id_continue) {
                     self.tree.push_token(c);
                     true
                 } else {
@@ -186,7 +186,7 @@ impl PegInterpreterState<'_, '_, '_> {
                 }
             }
             PegExpression::Anything => {
-                if let Some(c) = self.parser.eat() {
+                if let Some(c) = self.parser.anything() {
                     self.tree.push_token(c);
                     true
                 } else {
