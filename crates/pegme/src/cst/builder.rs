@@ -4,17 +4,16 @@ use super::*;
 
 #[derive(Debug, Default)]
 pub struct ExactParseTreeBuilder<K> {
-    interner_nodes: Interner<ExactParseNode<K>>,
-    interner_tokens: Interner<ExactParseToken>,
+    interner_trees: Interner<ConcreteSyntaxTree<K>>,
     interner_text: Interner<str>,
     stack: Vec<BuilderState<K>>,
-    tree: Option<ExactParseTree<K>>,
+    tree: Option<Arc<ConcreteSyntaxTree<K>>>,
 }
 
 #[derive(Debug, Clone)]
 struct BuilderState<K> {
     kind: K,
-    children: Vec<ExactParseNodeOrToken<K>>,
+    children: Vec<Arc<ConcreteSyntaxTree<K>>>,
     pending_tokens: String,
 }
 
@@ -36,9 +35,9 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
             }
 
             let text = self.interner_text.intern(state.pending_tokens.as_str());
-            let token = self.interner_tokens.intern(ExactParseToken::new(text));
+            let token = self.interner_trees.intern(ConcreteSyntaxTree::leaf(text));
 
-            state.children.push(ExactParseNodeOrToken::Token(token));
+            state.children.push(token);
             state.pending_tokens.clear();
         }
     }
@@ -53,28 +52,25 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
         });
     }
 
-    pub fn finish_node(&mut self) -> Arc<ExactParseNode<K>> {
+    pub fn finish_node(&mut self) -> Arc<ConcreteSyntaxTree<K>> {
         self.flush_pending_tokens();
 
         let BuilderState { kind, children, .. } = self.stack.pop().unwrap();
-        let len = children.iter().map(|n| n.len()).sum::<ExactParseNodeSize>();
-        let node = ExactParseNode::new(kind, len, children);
-        let node = self.interner_nodes.intern(node);
+        let node = ConcreteSyntaxTree::node(kind, children);
+        let node = self.interner_trees.intern(node);
 
         self.insert_node(node.clone());
 
         node
     }
 
-    pub fn insert_node(&mut self, node: Arc<ExactParseNode<K>>) {
+    pub fn insert_node(&mut self, node: Arc<ConcreteSyntaxTree<K>>) {
         self.flush_pending_tokens();
 
         if let Some(state) = self.current() {
-            state
-                .children
-                .push(ExactParseNodeOrToken::Node(node.clone()));
+            state.children.push(node.clone());
         } else {
-            self.tree = Some(ExactParseTree::from_root(node.clone()));
+            self.tree = Some(node.clone());
         }
     }
 
@@ -82,7 +78,7 @@ impl<K: Clone + Eq + Hash> ExactParseTreeBuilder<K> {
         self.stack.pop().unwrap();
     }
 
-    pub fn build(self) -> ExactParseTree<K> {
+    pub fn build(self) -> Arc<ConcreteSyntaxTree<K>> {
         self.tree.unwrap()
     }
 
@@ -141,10 +137,7 @@ impl<T: Eq + Hash + ?Sized> Interner<T> {
 mod tests {
     use std::sync::Arc;
 
-    use crate::tree::{
-        ExactParseNode, ExactParseNodeOrToken, ExactParseToken, ExactParseTree,
-        ExactParseTreeBuilder,
-    };
+    use crate::cst::{ConcreteSyntaxTree, ExactParseTreeBuilder};
 
     #[test]
     fn simple() {
@@ -163,26 +156,19 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             t,
-            ExactParseTree::from_root(Arc::new(ExactParseNode::new(
+            Arc::new(ConcreteSyntaxTree::node(
                 "hello",
-                3,
                 vec![
-                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                    Arc::new(ConcreteSyntaxTree::node(
                         "hi",
-                        2,
-                        vec![ExactParseNodeOrToken::Token(Arc::new(
-                            ExactParseToken::new(Arc::from("aa"))
-                        ))]
-                    ))),
-                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                        vec![Arc::new(ConcreteSyntaxTree::leaf(Arc::from("aa")))]
+                    )),
+                    Arc::new(ConcreteSyntaxTree::node(
                         "ho",
-                        1,
-                        vec![ExactParseNodeOrToken::Token(Arc::new(
-                            ExactParseToken::new(Arc::from("b"))
-                        ))]
-                    )))
+                        vec![Arc::new(ConcreteSyntaxTree::leaf(Arc::from("b")))]
+                    ))
                 ]
-            ))),
+            )),
         );
     }
 
@@ -203,13 +189,10 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             t,
-            ExactParseTree::from_root(Arc::new(ExactParseNode::new(
+            Arc::new(ConcreteSyntaxTree::node(
                 "hello",
-                4,
-                vec![ExactParseNodeOrToken::Token(Arc::new(
-                    ExactParseToken::new(Arc::from("abde"))
-                ))]
-            )))
+                vec![Arc::new(ConcreteSyntaxTree::leaf(Arc::from("abde")))]
+            ))
         );
     }
 
@@ -234,20 +217,16 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             t,
-            ExactParseTree::from_root(Arc::new(ExactParseNode::new(
+            Arc::new(ConcreteSyntaxTree::node(
                 "hello",
-                3,
                 vec![
-                    ExactParseNodeOrToken::Node(Arc::new(ExactParseNode::new(
+                    Arc::new(ConcreteSyntaxTree::node(
                         "hi",
-                        2,
-                        vec![ExactParseNodeOrToken::Token(Arc::new(
-                            ExactParseToken::new(Arc::from("aa"))
-                        ))]
-                    ))),
-                    ExactParseNodeOrToken::Token(Arc::new(ExactParseToken::new(Arc::from("b"))))
+                        vec![Arc::new(ConcreteSyntaxTree::leaf(Arc::from("aa")))]
+                    )),
+                    Arc::new(ConcreteSyntaxTree::leaf(Arc::from("b")))
                 ]
-            ))),
+            )),
         );
     }
 }

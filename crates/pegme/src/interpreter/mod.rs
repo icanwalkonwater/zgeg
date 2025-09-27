@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use crate::{
+    cst::{ConcreteSyntaxTree, ExactParseTreeBuilder},
     grammar::{PegExpression, PegGrammar, PegRuleName, PegTerminal},
     packrat::PackratParser,
-    tree::{ExactParseNode, ExactParseTree, ExactParseTreeBuilder},
 };
 
 pub fn parse_with_grammar(
     g: &PegGrammar,
     rule: &'static str,
     input: impl Into<String>,
-) -> Option<ExactParseTree<&'static str>> {
+) -> Option<Arc<ConcreteSyntaxTree<&'static str>>> {
     let mut parser = PackratParser::new(input);
     let mut tree = ExactParseTreeBuilder::default();
 
@@ -32,7 +32,7 @@ pub fn parse_with_grammar(
 
 struct PegInterpreterState<'g, 'p, 't> {
     grammar: &'g PegGrammar,
-    parser: &'p mut PackratParser<PegRuleName, Arc<ExactParseNode<&'static str>>>,
+    parser: &'p mut PackratParser<PegRuleName, Arc<ConcreteSyntaxTree<&'static str>>>,
     tree: &'t mut ExactParseTreeBuilder<&'static str>,
 }
 
