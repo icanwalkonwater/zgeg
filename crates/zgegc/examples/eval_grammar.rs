@@ -15,7 +15,7 @@ fn main() {
     dbg!(&file, file.len());
 
     let g = make_zgeg_grammar();
-    if let Some(tree) = pegme::interpreter::v2::parse_with_grammar(&g, "File", file) {
+    if let Some(tree) = pegme::interpreter::parse_with_grammar(&g, "File", file) {
         println!("{tree}");
     } else {
         println!("Syntax error");

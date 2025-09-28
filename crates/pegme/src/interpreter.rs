@@ -1,205 +1,313 @@
 use std::sync::Arc;
 
+use itertools::Itertools;
+
 use crate::{
     cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder},
     grammar::{PegExpression, PegGrammar, PegRuleName, PegTerminal},
-    packrat::PackratParser,
+    packrat::{PackratMark, PackratParser},
 };
-
-pub mod v2;
 
 pub fn parse_with_grammar(
     g: &PegGrammar,
-    rule: &'static str,
-    input: impl Into<String>,
+    root: &'static str,
+    input: String,
 ) -> Option<Arc<ConcreteSyntaxTree<&'static str>>> {
-    let mut parser = PackratParser::new(input);
-    let mut tree = ConcreteSyntaxTreeBuilder::default();
-
-    let mut state = PegInterpreterState {
+    let mut state = InterpreterState {
         grammar: g,
-        parser: &mut parser,
-        tree: &mut tree,
+        parser: PackratParser::new(input),
+        tree: ConcreteSyntaxTreeBuilder::default(),
     };
-    let matches = state.eval_nonterminal(PegRuleName(rule));
 
-    match matches {
-        true => Some(tree.build()),
-        false => {
-            println!("Partial tree: {tree:#?}");
-            None
-        }
+    // This also initializes the packrat memos.
+    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root)), false);
+
+    if !matches {
+        println!("No match");
+        return None;
     }
+
+    // Build the CST.
+    state.parser.reset();
+    state.parse_rule(PegRuleName(root));
+
+    Some(state.tree.build())
 }
 
-struct PegInterpreterState<'g, 'p, 't> {
+struct InterpreterState<'g> {
     grammar: &'g PegGrammar,
-    parser: &'p mut PackratParser<PegRuleName, Arc<ConcreteSyntaxTree<&'static str>>>,
-    tree: &'t mut ConcreteSyntaxTreeBuilder<&'static str>,
+    parser: PackratParser<PegRuleName, ()>,
+    tree: ConcreteSyntaxTreeBuilder<&'static str>,
 }
 
-impl PegInterpreterState<'_, '_, '_> {
-    fn eval_nonterminal(&mut self, rule: PegRuleName) -> bool {
+#[derive(Debug)]
+struct ScavengeReport {
+    named_nodes: Vec<(PegRuleName, PackratMark, PackratMark)>,
+}
+
+impl InterpreterState<'_> {
+    /// This should only be called on rules that we know match.
+    ///
+    /// Builds the concrete syntax tree for this rule, called recursively.
+    fn parse_rule(&mut self, name: PegRuleName) {
         let start = self.parser.mark();
+        let (end, _) = self.parser.memo(name, start).unwrap().unwrap();
 
-        if let Some(memo) = self.parser.memo(rule, start) {
-            // There is a result cached.
-            match memo {
-                Some((end, node)) => {
-                    self.parser.reset_to(end);
-                    self.tree.insert_node(node);
-                    return true;
-                }
-                None => {
-                    self.parser.reset_to(start);
-                    return false;
-                }
-            }
+        let report = self.scavenge_rule(name);
+
+        assert!(
+            report.named_nodes.iter().all(|(_, s, e)| s <= e),
+            "Scavenger returned nonsensical marks"
+        );
+        for ((_, _, left), (_, right, _)) in report.named_nodes.iter().tuple_windows() {
+            assert!(
+                left <= right,
+                "Scout return marks that aren't consecutive: {left:?} > {right:?}"
+            );
         }
 
-        let expr = self.grammar.rule(rule).expr();
+        self.parser.reset_to(start);
 
-        self.tree.start_node(rule.0);
-        if self.eval_expression(expr) {
-            // Success, finish the subtree and memoize it.
-            let end = self.parser.mark();
-            let node = self.tree.finish_node();
-            self.parser.memoize_match(rule, start, end, node);
+        self.tree.start_node(name.0);
 
-            true
-        } else {
-            // Failed, trash the subtree and reset the parser.
-            self.tree.trash_node();
-            self.parser.reset_to(start);
-            self.parser.memoize_miss(rule, start);
+        for (rule, start, end) in report.named_nodes {
+            // Eat leading tokens
+            let tokens = self.parser.eat_up_to(start);
+            self.tree.push_tokens(tokens);
 
-            false
+            self.parse_rule(rule);
+            assert_eq!(self.parser.mark(), end);
         }
+
+        // Eat trailing tokens
+        let tokens = self.parser.eat_up_to(end);
+        self.tree.push_tokens(tokens);
+
+        self.tree.finish_node();
     }
 
-    fn eval_expression(&mut self, expr: &PegExpression) -> bool {
-        let start = self.parser.mark();
-        let tree_checkpoint = self.tree.checkpoint();
+    /// This should only be called on rules that we know match.
+    ///
+    /// Scaffolding for `scavenge_expression`.
+    fn scavenge_rule(&mut self, rule: PegRuleName) -> ScavengeReport {
+        assert!(
+            matches!(self.parser.memo(rule, self.parser.mark()), Some(Some(_))),
+            "Tried to scavenge a rule that doesn't match: {rule:?} at {:?}",
+            self.parser.mark()
+        );
 
-        let matches = match expr {
-            PegExpression::Terminal(PegTerminal::Exact(lit)) => {
-                let res = self.parser.expect(lit);
-                if res {
-                    self.tree.push_tokens(lit);
-                }
-                res
+        let mut report = ScavengeReport {
+            named_nodes: Default::default(),
+        };
+
+        let rule = self.grammar.rule(rule);
+        self.scavenge_expression(rule.expr(), &mut report);
+
+        report
+    }
+
+    /// This should only be called on expression that we know match.
+    ///
+    /// Walks the current expression to collect the matching non terminals and remember their
+    /// positions, called recursively.
+    fn scavenge_expression(&mut self, expr: &PegExpression, report: &mut ScavengeReport) {
+        {
+            // Sanity check
+            let start = self.parser.mark();
+            assert!(
+                self.test_expression(expr, true),
+                "Tried to scavenge an expression that doesn't match: `{expr}` at {start:?}"
+            );
+            self.parser.reset_to(start);
+        }
+
+        use PegExpression::*;
+        match expr {
+            // Just advance terminals, there is nothing to scavenge there.
+            expr @ Terminal(_) => {
+                // Use the test to advance the parser.
+                let res = self.test_expression(expr, true);
+                assert!(res);
             }
-            PegExpression::Terminal(PegTerminal::CharacterRanges(ranges)) => {
-                if let Some(c) = self
-                    .parser
-                    .eat(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
-                {
-                    self.tree.push_token(c);
-                    true
-                } else {
-                    false
-                }
+            // This is the main thing we are looking for.
+            Rule(name) => {
+                let start = self.parser.mark();
+
+                // It always matches.
+                let (end, _) = self.parser.memo(*name, start).unwrap().unwrap();
+                report.named_nodes.push((*name, start, end));
+
+                self.parser.reset_to(end);
             }
-            PegExpression::Terminal(PegTerminal::PredefinedAscii) => {
-                if let Some(c) = self.parser.eat(|c| c.is_ascii()) {
-                    self.tree.push_token(c);
-                    true
-                } else {
-                    false
-                }
+            Named(_, expr) => {
+                // TODO: handle named expressions.
+                self.scavenge_expression(expr, report)
             }
-            PegExpression::Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
-                if let Some(c) = self.parser.eat(char::is_whitespace) {
-                    self.tree.push_token(c);
-                    true
-                } else {
-                    false
-                }
+            Seq(l, r) => {
+                self.scavenge_expression(l, report);
+                self.scavenge_expression(r, report);
             }
-            PegExpression::Terminal(PegTerminal::PredefinedUtf8XidStart) => {
-                if let Some(c) = self.parser.eat(unicode_id_start::is_id_start) {
-                    self.tree.push_token(c);
-                    true
-                } else {
-                    false
-                }
-            }
-            PegExpression::Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
-                if let Some(c) = self.parser.eat(unicode_id_start::is_id_continue) {
-                    self.tree.push_token(c);
-                    true
-                } else {
-                    false
-                }
-            }
-            PegExpression::Rule(rule) => self.eval_nonterminal(*rule),
-            PegExpression::Named(_name, expr) => self.eval_expression(expr),
-            PegExpression::Seq(first, second) => {
-                self.eval_expression(first) && self.eval_expression(second)
-            }
-            PegExpression::Choice(first, second) => {
-                if !self.eval_expression(first) {
+            Choice(l, r) => {
+                // We don't know if the first half matches so we need to do a bit of gymnastic to
+                // figure it out.
+
+                let start = self.parser.mark();
+                if self.test_expression(l, true) {
+                    // It's the first choice.
                     self.parser.reset_to(start);
-                    self.tree.restore_checkpoint(tree_checkpoint.clone());
 
-                    self.eval_expression(second)
+                    self.scavenge_expression(l, report);
                 } else {
-                    true
+                    // It's the second choice.
+                    // No rollback since the test didn't pass and didn't consume.
+                    self.scavenge_expression(r, report);
                 }
             }
-            PegExpression::Repetition { expr, min, max } => {
+            Repetition { expr, min, max } => {
+                // This one is tricky, we don't know how many are supposed to match.
+                // So we basically do it all over again.
+
                 let max = max.unwrap_or(u32::MAX);
-
-                // Greedily match as much as possible.
                 let mut matches = 0;
-                while matches < max {
-                    let mark = self.parser.mark();
-                    let tree_checkpoint = self.tree.checkpoint();
 
-                    if !self.eval_expression(expr) {
-                        // Backtrack the failed match.
-                        self.parser.reset_to(mark);
-                        self.tree.restore_checkpoint(tree_checkpoint);
-                        break;
-                    }
+                // Fast track the `min` first.
+                while matches < *min {
+                    self.scavenge_expression(expr, report);
                     matches += 1;
                 }
 
-                *min <= matches && matches <= max
+                while matches < max {
+                    let start = self.parser.mark();
+                    if self.test_expression(expr, true) {
+                        self.parser.reset_to(start);
+                        self.scavenge_expression(expr, report);
+                        matches += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                assert!(*min <= matches && matches <= max);
             }
-            PegExpression::Predicate { expr, positive } => {
-                let mark = self.parser.mark();
-                let tree_checkpoint = self.tree.checkpoint();
+            Predicate { .. } => {
+                // This is just a noop, we know it matches and there is nothing to scavenge.
+            }
+            Anything => {
+                let res = self.parser.anything();
+                assert!(res.is_some());
+            }
+            Epsilon => {
+                // Literally nothing.
+            }
+        }
+    }
 
-                let matches = self.eval_expression(expr);
+    /// Implements the PEG operators, called recursively.
+    fn test_expression(&mut self, expr: &PegExpression, memo_only: bool) -> bool {
+        use PegExpression::*;
+        match expr {
+            Terminal(PegTerminal::Exact(lit)) => self.parser.expect(lit),
+            Terminal(PegTerminal::CharacterRanges(ranges)) => self
+                .parser
+                .eat(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
+                .is_some(),
+            Terminal(PegTerminal::PredefinedAscii) => self.parser.eat(|c| c.is_ascii()).is_some(),
+            Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
+                self.parser.eat(char::is_whitespace).is_some()
+            }
+            Terminal(PegTerminal::PredefinedUtf8XidStart) => {
+                self.parser.eat(unicode_id_start::is_id_start).is_some()
+            }
+            Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
+                self.parser.eat(unicode_id_start::is_id_continue).is_some()
+            }
+            Rule(name) => {
+                let start = self.parser.mark();
 
-                // Always backtrack a predicate.
-                self.parser.reset_to(mark);
-                self.tree.restore_checkpoint(tree_checkpoint);
+                // Look up the rule's memo and only test it if it doesn't pass.
+                match self.parser.memo(*name, start) {
+                    Some(Some((end, _))) => {
+                        self.parser.reset_to(end);
+                        true
+                    }
+                    Some(None) => false,
+                    None if memo_only => {
+                        panic!("Trying to match a rule that isn't memoized: {name} at {start:?}");
+                    }
+                    None => {
+                        let rule = self.grammar.rule(*name);
+                        let matches = self.test_expression(rule.expr(), memo_only);
 
-                // scary shit
-                //   - bitsneak (probably)
-                if *positive {
-                    matches
-                } else {
-                    !matches
+                        if matches {
+                            let end = self.parser.mark();
+                            self.parser.memoize_match(*name, start, end, ());
+                            true
+                        } else {
+                            self.parser.memoize_miss(*name, start);
+                            false
+                        }
+                    }
                 }
             }
-            PegExpression::Anything => {
-                if let Some(c) = self.parser.anything() {
-                    self.tree.push_token(c);
+            Named(_, expr) => {
+                // Named expression don't do shit here.
+                self.test_expression(expr, memo_only)
+            }
+            Seq(first, second) => {
+                let start = self.parser.mark();
+
+                // Match the first, then the second.
+                // If the second doesn't match, we need to manually rollback.
+                match self.test_expression(first, memo_only) {
+                    true => match self.test_expression(second, memo_only) {
+                        true => true,
+                        false => {
+                            self.parser.reset_to(start);
+                            false
+                        }
+                    },
+                    false => false,
+                }
+            }
+            Choice(left, right) => {
+                // Rely on short circuiting to test the second part only if the first one doesn't
+                // match.
+                // No manual rollback needed here.
+                self.test_expression(left, memo_only) || self.test_expression(right, memo_only)
+            }
+            Repetition { expr, min, max } => {
+                let start = self.parser.mark();
+
+                let max = max.unwrap_or(u32::MAX);
+                let mut matches = 0;
+
+                // Greedily match as much as possible.
+                while matches < max {
+                    match self.test_expression(expr, memo_only) {
+                        true => matches += 1,
+                        false => break,
+                    }
+                }
+
+                if *min <= matches && matches <= max {
                     true
                 } else {
+                    self.parser.reset_to(start);
                     false
                 }
             }
-            PegExpression::Epsilon => true,
-        };
+            Predicate { expr, positive } => {
+                let start = self.parser.mark();
 
-        if !matches {
-            self.parser.reset_to(start);
-            self.tree.restore_checkpoint(tree_checkpoint);
+                let matches = self.test_expression(expr, memo_only);
+
+                // Always rollback when doing a predicate.
+                self.parser.reset_to(start);
+
+                matches == *positive
+            }
+            Anything => self.parser.anything().is_some(),
+            Epsilon => true,
         }
-        matches
     }
 }
