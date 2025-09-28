@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 pub struct PackratParser<R = &'static str, D = bool> {
     input: String,
@@ -21,6 +21,10 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
 
     pub fn mark(&self) -> PackratMark {
         PackratMark(self.position)
+    }
+
+    pub fn reset(&mut self) {
+        self.position = 0;
     }
 
     pub fn reset_to(&mut self, mark: PackratMark) {
@@ -58,10 +62,6 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
         &self.input[prev_position..mark.0]
     }
 
-    pub fn advance(&mut self, by: usize) {
-        self.position += by;
-    }
-
     pub fn memo(&mut self, rule: R, start: PackratMark) -> Option<Option<(PackratMark, D)>> {
         self.memos.get(&(rule, start)).cloned()
     }
@@ -92,12 +92,40 @@ mod tests {
     #[test]
     fn packrat_eat() {
         let mut parser = PackratParser::<()>::new("ABCD");
+        assert_eq!(parser.eat(|c| c.is_ascii()), Some('A'));
+        assert_eq!(parser.position, 1);
+        assert_eq!(parser.eat(|_| false), None);
+        assert_eq!(parser.position, 1);
+        assert_eq!(parser.eat(|c| c == 'B'), Some('B'));
+        assert_eq!(parser.position, 2);
+        assert_eq!(parser.eat(|c| c == 'C'), Some('C'));
+        assert_eq!(parser.position, 3);
+        assert_eq!(parser.eat(|c| c == 'D'), Some('D'));
+        assert_eq!(parser.position, 4);
+        assert_eq!(parser.eat(|_| true), None);
+        assert_eq!(parser.position, 4);
+        assert_eq!(parser.eat(|_| false), None);
+        assert_eq!(parser.position, 4);
+        assert_eq!(parser.eat(|c| c == 'D'), None);
+        assert_eq!(parser.position, 4);
+    }
+
+    #[test]
+    fn packrat_anything() {
+        let mut parser = PackratParser::<()>::new("ABCD");
+        assert_eq!(parser.position, 0);
         assert_eq!(parser.anything(), Some('A'));
+        assert_eq!(parser.position, 1);
         assert_eq!(parser.anything(), Some('B'));
+        assert_eq!(parser.position, 2);
         assert_eq!(parser.anything(), Some('C'));
+        assert_eq!(parser.position, 3);
         assert_eq!(parser.anything(), Some('D'));
+        assert_eq!(parser.position, 4);
         assert_eq!(parser.anything(), None);
+        assert_eq!(parser.position, 4);
         assert_eq!(parser.anything(), None);
+        assert_eq!(parser.position, 4);
     }
 
     #[test]
@@ -112,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn packrat_rest_to_mark() {
+    fn packrat_reset_to_mark() {
         let mut parser = PackratParser::<()>::new("ABCD");
         assert_eq!(parser.anything(), Some('A'));
         let m = parser.mark();
@@ -126,8 +154,12 @@ mod tests {
     #[test]
     fn packrat_expect() {
         let mut parser = PackratParser::<()>::new("ABCD");
+        assert_eq!(parser.position, 0);
         assert!(parser.expect("AB"));
+        assert_eq!(parser.position, 2);
         assert!(!parser.expect("D"));
+        assert_eq!(parser.position, 2);
         assert!(parser.expect("C"));
+        assert_eq!(parser.position, 3);
     }
 }

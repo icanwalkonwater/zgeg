@@ -20,7 +20,7 @@ pub fn parse_with_grammar(
     };
 
     // This also initializes the packrat memos.
-    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root)));
+    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root)), false);
 
     if !matches {
         println!("No match");
@@ -28,6 +28,7 @@ pub fn parse_with_grammar(
     }
 
     // Build the CST.
+    state.parser.reset();
     state.parse_rule(PegRuleName(root));
 
     Some(state.tree.build())
@@ -53,7 +54,6 @@ impl InterpreterState<'_> {
         let (end, _) = self.parser.memo(name, start).unwrap().unwrap();
 
         let report = self.scavenge_rule(name);
-        dbg!(&report);
 
         assert!(
             report.named_nodes.iter().all(|(_, s, e)| s <= e),
@@ -92,7 +92,8 @@ impl InterpreterState<'_> {
     fn scavenge_rule(&mut self, rule: PegRuleName) -> ScavengeReport {
         assert!(
             matches!(self.parser.memo(rule, self.parser.mark()), Some(Some(_))),
-            "Tried to scavenge a rule that doesn't match"
+            "Tried to scavenge a rule that doesn't match: {rule:?} at {:?}",
+            self.parser.mark()
         );
 
         let mut report = ScavengeReport {
@@ -114,8 +115,8 @@ impl InterpreterState<'_> {
             // Sanity check
             let start = self.parser.mark();
             assert!(
-                self.test_expression(expr),
-                "Tried to scavenge an expression that doesn't match"
+                self.test_expression(expr, true),
+                "Tried to scavenge an expression that doesn't match: `{expr}` at {start:?}"
             );
             self.parser.reset_to(start);
         }
@@ -124,16 +125,24 @@ impl InterpreterState<'_> {
         match expr {
             // Just advance terminals, there is nothing to scavenge there.
             expr @ Terminal(_) => {
-                self.test_expression(expr);
+                // Use the test to advance the parser.
+                let res = self.test_expression(expr, true);
+                assert!(res);
             }
             // This is the main thing we are looking for.
             Rule(name) => {
                 let start = self.parser.mark();
 
+                // It always matches.
                 let (end, _) = self.parser.memo(*name, start).unwrap().unwrap();
                 report.named_nodes.push((*name, start, end));
+
+                self.parser.reset_to(end);
             }
-            Named(_, expr) => self.scavenge_expression(expr, report),
+            Named(_, expr) => {
+                // TODO: handle named expressions.
+                self.scavenge_expression(expr, report)
+            }
             Seq(l, r) => {
                 self.scavenge_expression(l, report);
                 self.scavenge_expression(r, report);
@@ -143,7 +152,7 @@ impl InterpreterState<'_> {
                 // figure it out.
 
                 let start = self.parser.mark();
-                if self.test_expression(l) {
+                if self.test_expression(l, true) {
                     // It's the first choice.
                     self.parser.reset_to(start);
 
@@ -164,11 +173,12 @@ impl InterpreterState<'_> {
                 // Fast track the `min` first.
                 while matches < *min {
                     self.scavenge_expression(expr, report);
+                    matches += 1;
                 }
 
                 while matches < max {
                     let start = self.parser.mark();
-                    if self.test_expression(expr) {
+                    if self.test_expression(expr, true) {
                         self.parser.reset_to(start);
                         self.scavenge_expression(expr, report);
                         matches += 1;
@@ -176,19 +186,24 @@ impl InterpreterState<'_> {
                         break;
                     }
                 }
+
+                assert!(*min <= matches && matches <= max);
             }
             Predicate { .. } => {
                 // This is just a noop, we know it matches and there is nothing to scavenge.
             }
             Anything => {
-                self.parser.anything();
+                let res = self.parser.anything();
+                assert!(res.is_some());
             }
-            Epsilon => {}
+            Epsilon => {
+                // Literally nothing.
+            }
         }
     }
 
     /// Implements the PEG operators, called recursively.
-    fn test_expression(&mut self, expr: &PegExpression) -> bool {
+    fn test_expression(&mut self, expr: &PegExpression, memo_only: bool) -> bool {
         use PegExpression::*;
         match expr {
             Terminal(PegTerminal::Exact(lit)) => self.parser.expect(lit),
@@ -211,16 +226,21 @@ impl InterpreterState<'_> {
 
                 // Look up the rule's memo and only test it if it doesn't pass.
                 match self.parser.memo(*name, start) {
-                    Some(Some(_)) => true,
+                    Some(Some((end, _))) => {
+                        self.parser.reset_to(end);
+                        true
+                    }
                     Some(None) => false,
+                    None if memo_only => {
+                        panic!("Trying to match a rule that isn't memoized: {name} at {start:?}");
+                    }
                     None => {
                         let rule = self.grammar.rule(*name);
-                        let matches = self.test_expression(rule.expr());
+                        let matches = self.test_expression(rule.expr(), memo_only);
 
                         if matches {
-                            println!("Memoize match {name} at {start:?}");
-                            self.parser
-                                .memoize_match(*name, start, self.parser.mark(), ());
+                            let end = self.parser.mark();
+                            self.parser.memoize_match(*name, start, end, ());
                             true
                         } else {
                             self.parser.memoize_miss(*name, start);
@@ -231,15 +251,15 @@ impl InterpreterState<'_> {
             }
             Named(_, expr) => {
                 // Named expression don't do shit here.
-                self.test_expression(expr)
+                self.test_expression(expr, memo_only)
             }
             Seq(first, second) => {
                 let start = self.parser.mark();
 
                 // Match the first, then the second.
                 // If the second doesn't match, we need to manually rollback.
-                match self.test_expression(first) {
-                    true => match self.test_expression(second) {
+                match self.test_expression(first, memo_only) {
+                    true => match self.test_expression(second, memo_only) {
                         true => true,
                         false => {
                             self.parser.reset_to(start);
@@ -253,7 +273,7 @@ impl InterpreterState<'_> {
                 // Rely on short circuiting to test the second part only if the first one doesn't
                 // match.
                 // No manual rollback needed here.
-                self.test_expression(left) || self.test_expression(right)
+                self.test_expression(left, memo_only) || self.test_expression(right, memo_only)
             }
             Repetition { expr, min, max } => {
                 let start = self.parser.mark();
@@ -263,7 +283,7 @@ impl InterpreterState<'_> {
 
                 // Greedily match as much as possible.
                 while matches < max {
-                    match self.test_expression(expr) {
+                    match self.test_expression(expr, memo_only) {
                         true => matches += 1,
                         false => break,
                     }
@@ -279,7 +299,7 @@ impl InterpreterState<'_> {
             Predicate { expr, positive } => {
                 let start = self.parser.mark();
 
-                let matches = self.test_expression(expr);
+                let matches = self.test_expression(expr, memo_only);
 
                 // Always rollback when doing a predicate.
                 self.parser.reset_to(start);

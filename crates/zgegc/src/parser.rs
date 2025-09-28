@@ -23,6 +23,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
         EOF, EOL,
         DOT, DOTDOT, COMMA, SEMICOLON,
         PLUS, PLUSPLUS, HYPHEN, HYPHENHYPHEN, STAR, STARSTAR, SLASH_F,
+        QUESTION_MARK,
         QUOTE_S, QUOTE_D,
         PAREN_L, PAREN_R,
         BRACES_L, BRACES_R,
@@ -47,6 +48,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     ExprAtom += &Number;
     ExprAtom += &STRING;
     ExprAtom += &FunctionCall;
+    ExprAtom += &Ident;
 
     ExprInfixOp += &PLUS;
     ExprInfixOp += &HYPHEN;
@@ -54,6 +56,7 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     ExprInfixOp += &SLASH_F;
     ExprPrefixOp += &PLUS;
     ExprPrefixOp += &HYPHEN;
+    ExprPostfixOp += &QUESTION_MARK;
 
     FunctionCall += &Ident + &PAREN_L + opt(&Expr + star(&COMMA + &Expr) + opt(&COMMA)) + &PAREN_R;
 
@@ -72,11 +75,10 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     INTEGER += &Trivia + plus(c09()) + not(cazAZ09());
     FLOATING += &Trivia + plus(c09()) + "." + star(c09()) + class("fF") + not(cazAZ09());
 
-    STRING += &Trivia + "'" + &LITERAL_SPLITTER + star(not("'") + any()) + &LITERAL_SPLITTER + "'";
-    STRING +=
-        &Trivia + "\"" + &LITERAL_SPLITTER + star(not("\"") + any()) + &LITERAL_SPLITTER + "\"";
+    STRING += &Trivia + "'" + star(not("'") + any()) + "'";
+    STRING += &Trivia + "\"" + star(not("\"") + any()) + "\"";
 
-    Whitespace += class(" \t\n\r");
+    Whitespace += plus(class(" \t\n\r"));
     Comment += "//" + star(not(&EOL) + any()) + &EOL;
     Trivia += star(&Whitespace | &Comment);
 
@@ -100,9 +102,10 @@ pub fn make_zgeg_grammar() -> PegGrammar {
     HYPHENHYPHEN += &Trivia + "--";
     STAR += &Trivia + "*" + not("*");
     STARSTAR += &Trivia + "**";
+    SLASH_F += &Trivia + "/" + not("/");
+    QUESTION_MARK += &Trivia + "?";
     QUOTE_S += &Trivia + "'";
     QUOTE_D += &Trivia + "\"";
-    SLASH_F += &Trivia + "/" + not("/");
     PAREN_L += &Trivia + "(";
     PAREN_R += &Trivia + ")";
     BRACES_L += &Trivia + "{";
