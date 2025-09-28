@@ -68,7 +68,7 @@ impl InterpreterState<'_> {
 
         self.parser.reset_to(start);
 
-        self.tree.start_node(name.0);
+        let node_ticket = self.tree.start_node(name.0);
 
         for (rule, start, end) in report.named_nodes {
             // Eat leading tokens
@@ -83,7 +83,7 @@ impl InterpreterState<'_> {
         let tokens = self.parser.eat_up_to(end);
         self.tree.push_tokens(tokens);
 
-        self.tree.finish_node();
+        self.tree.finish_node(node_ticket);
     }
 
     /// This should only be called on rules that we know match.
