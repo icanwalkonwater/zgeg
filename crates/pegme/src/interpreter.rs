@@ -36,7 +36,7 @@ pub fn parse_with_grammar(
 
 struct InterpreterState<'g> {
     grammar: &'g PegGrammar,
-    parser: PackratParser<PegRuleName, ()>,
+    parser: PackratParser<PegRuleName>,
     tree: ConcreteSyntaxTreeBuilder<&'static str>,
 }
 
@@ -51,7 +51,7 @@ impl InterpreterState<'_> {
     /// Builds the concrete syntax tree for this rule, called recursively.
     fn parse_rule(&mut self, name: PegRuleName) {
         let start = self.parser.mark();
-        let (end, _) = self.parser.memo(name, start).unwrap().unwrap();
+        let end = self.parser.memo(name, start).unwrap().unwrap();
 
         let report = self.scavenge_rule(name);
 
@@ -134,7 +134,7 @@ impl InterpreterState<'_> {
                 let start = self.parser.mark();
 
                 // It always matches.
-                let (end, _) = self.parser.memo(*name, start).unwrap().unwrap();
+                let end = self.parser.memo(*name, start).unwrap().unwrap();
                 report.named_nodes.push((*name, start, end));
 
                 self.parser.reset_to(end);
@@ -226,7 +226,7 @@ impl InterpreterState<'_> {
 
                 // Look up the rule's memo and only test it if it doesn't pass.
                 match self.parser.memo(*name, start) {
-                    Some(Some((end, _))) => {
+                    Some(Some(end)) => {
                         self.parser.reset_to(end);
                         true
                     }
@@ -240,7 +240,7 @@ impl InterpreterState<'_> {
 
                         if matches {
                             let end = self.parser.mark();
-                            self.parser.memoize_match(*name, start, end, ());
+                            self.parser.memoize_match(*name, start, end);
                             true
                         } else {
                             self.parser.memoize_miss(*name, start);

@@ -1,12 +1,12 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-pub struct PackratParser<R = &'static str, D = bool> {
+pub struct PackratParser<R = &'static str> {
     input: String,
     position: usize,
-    memos: HashMap<(R, PackratMark), Option<(PackratMark, D)>>,
+    memos: HashMap<(R, PackratMark), Option<PackratMark>>,
 }
 
-impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
+impl<R: Copy + Hash + Eq> PackratParser<R> {
     pub fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),
@@ -62,13 +62,13 @@ impl<R: Copy + Hash + Eq, D: Clone> PackratParser<R, D> {
         &self.input[prev_position..mark.0]
     }
 
-    pub fn memo(&mut self, rule: R, start: PackratMark) -> Option<Option<(PackratMark, D)>> {
+    pub fn memo(&mut self, rule: R, start: PackratMark) -> Option<Option<PackratMark>> {
         self.memos.get(&(rule, start)).cloned()
     }
 
-    pub fn memoize_match(&mut self, rule: R, start: PackratMark, end: PackratMark, value: D) {
+    pub fn memoize_match(&mut self, rule: R, start: PackratMark, end: PackratMark) {
         assert!(start.0 <= end.0);
-        self.memos.insert((rule, start), Some((end, value)));
+        self.memos.insert((rule, start), Some(end));
     }
 
     pub fn memoize_miss(&mut self, rule: R, start: PackratMark) {
