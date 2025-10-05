@@ -10,5 +10,7 @@ edition = "2021"
 clap = { version = "4.5", features = ["derive"] }
 indexmap = "2.11"
 itertools = "0.14"
-pretty_assertions = "1.4"
 unicode-id-start = "1.4"
+quote = "1.0"
+proc-macro2 = "1.0"
+pretty_assertions = "1.4"

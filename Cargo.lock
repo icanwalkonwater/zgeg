@@ -166,6 +166,8 @@ dependencies = [
  "indexmap",
  "itertools",
  "pretty_assertions",
+ "proc-macro2",
+ "quote",
  "unicode-id-start",
 ]
 
