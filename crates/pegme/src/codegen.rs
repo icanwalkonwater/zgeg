@@ -174,9 +174,7 @@ fn codegen_test_peg_expression(
             let test_right = codegen_test_peg_expression(right, fragment_success, fragment_failure);
             quote! {
                 match { #test_left } {
-                    true => {
-                        #test_right
-                    },
+                    true => { #test_right },
                     false => #fragment_failure,
                 }
             }
@@ -203,13 +201,57 @@ fn codegen_test_peg_expression(
         } => {
             // Special case of the optional operator (`?`).
             // It basically never fails. If the test fails it still passes.
-            let test_expr = codegen_test_peg_expression(expr, &fragment_success, &fragment_success);
+
+            let test_expr = codegen_test_peg_expression(expr, fragment_success, fragment_success);
 
             quote! {
                 #test_expr
             }
         }
+        PegExpression::Repetition {
+            expr,
+            min: 0,
+            max: None,
+        } => {
+            // Special case of the star operator (`*`).
+            // Basically eat as much as it wants. There is no failure
+
+            let test_expr = codegen_test_peg_expression(expr, &quote! { true }, &quote! { false });
+
+            quote! {
+                while { #test_expr } {}
+                #fragment_success
+            }
+        }
+        PegExpression::Repetition {
+            expr,
+            min,
+            max: None,
+        } => {
+            assert_ne!(*min, 0);
+            // Special case for when there is a min but no max (like `+`).
+
+            let test_expr = codegen_test_peg_expression(expr, &quote! { true }, &quote! { false });
+            let test_exprs = std::iter::repeat_n(test_expr.clone(), *min as _).collect::<Vec<_>>();
+
+            quote! {
+                let repeat_start = self.parser.mark();
+                match true #(&& { #test_exprs })* {
+                    true => {
+                        while { #test_expr } {}
+                        #fragment_success
+                    },
+                    false => {
+                        self.parser.reset_to(repeat_start);
+                        #fragment_failure
+                    }
+                }
+            }
+        }
         PegExpression::Repetition { expr, min, max } => {
+            // This is the general case.
+            // It need to keep track of how many matches.
+
             let test_expr = codegen_test_peg_expression(expr, &quote! { true }, &quote! { false });
 
             let (loop_check_max, result_check) = match max {
