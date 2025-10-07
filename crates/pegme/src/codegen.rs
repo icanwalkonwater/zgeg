@@ -1,9 +1,9 @@
-use crate::grammar::{PegExpression, PegGrammar, PegRule, PegTerminal};
+use crate::grammar::{PegExpression, PegGrammar, PegTerminal};
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, TokenStreamExt};
+use quote::{format_ident, quote};
 
-pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
+pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     let syntax_kind_ident = format_ident!("{name}Kind");
     let syntax_kind_variants = g
         .rule_names()
@@ -14,9 +14,21 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
 
     // Generate entry point.
 
+    let entry_point_test_rule = format_ident!("test_{rule}");
+    let entry_point_parse_rule = format_ident!("parse_{rule}");
     let entry_point = quote! {
         pub fn parse(input: String) -> Arc<ConcreteSyntaxTree<#syntax_kind_ident>> {
-            todo!()
+            let mut parser_state = #parser_ident {
+                parser: PackratParser::new(input),
+                tree: ConcreteSyntaxTreeBuilder::default(),
+            };
+
+            // Prime packrat.
+            let valid = parser_state.#entry_point_test_rule();
+            assert!(valid, "Couldn't parse {}", #rule);
+
+            parser_state.#entry_point_parse_rule();
+            parser_state.tree.build()
         }
     };
 
@@ -33,9 +45,9 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
     // Generate parser state struct.
 
     let parser_struct = quote! {
-        pub struct #parser_ident {
+        struct #parser_ident {
             parser: PackratParser<#syntax_kind_ident>,
-            tree: ConcreteSyntaxTree<#syntax_kind_ident>,
+            tree: ConcreteSyntaxTreeBuilder<#syntax_kind_ident>,
         }
     };
 
@@ -55,9 +67,19 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
         let rule_kind = format_ident!("{rule_name}");
         let rule_kind = quote! { #syntax_kind_ident::#rule_kind };
 
+        let parse_body = codegen_parse_peg_expression(rule.expr());
+
         parser_body.extend(quote! {
             #[doc = #doc]
-            fn #parse_fn_ident(&mut self) { todo!() }
+            fn #parse_fn_ident(&mut self) {
+                let end = self.parser.memo(#rule_kind, self.parser.mark()).unwrap().unwrap();
+                let node = self.tree.start_node(#rule_kind);
+
+                #parse_body
+
+                self.parser.reset_to(end);
+                self.tree.finish_node(node);
+            }
         });
 
         let test_body = codegen_test_peg_expression(
@@ -94,7 +116,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
 
     quote! {
         use std::sync::Arc;
-        use crate::{packrat::PackratParser, cst::ConcreteSyntaxTree};
+        use crate::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
 
         #entry_point
         #syntax_kind_enum
@@ -106,6 +128,142 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String) -> String {
         }
     }
     .to_string()
+}
+
+fn codegen_parse_peg_expression(expr: &PegExpression) -> TokenStream {
+    match expr {
+        PegExpression::Terminal(PegTerminal::Exact(lit)) => quote! {
+            self.parser.expect(#lit);
+            self.tree.push_tokens(#lit);
+        },
+        PegExpression::Terminal(
+            PegTerminal::CharacterRanges(_)
+            | PegTerminal::PredefinedAscii
+            | PegTerminal::PredefinedUtf8Whitespace
+            | PegTerminal::PredefinedUtf8XidStart
+            | PegTerminal::PredefinedUtf8XidContinue,
+        ) => quote! {
+            self.tree.push_token(self.parser.eat(|_| true).unwrap());
+        },
+        PegExpression::Rule(rule) => {
+            let parse_rule_ident = format_ident!("parse_{rule}");
+            quote! {
+                self.#parse_rule_ident();
+            }
+        }
+        PegExpression::Named(_, expr) => {
+            // TODO: actually handle the name
+            codegen_parse_peg_expression(expr)
+        }
+        PegExpression::Seq(left, right) => {
+            let code_left = codegen_parse_peg_expression(left);
+            let code_right = codegen_parse_peg_expression(right);
+            quote! {
+                #code_left
+                #code_right
+            }
+        }
+        PegExpression::Choice(left, right) => {
+            let test_left = codegen_lookahead_peg_expression(left);
+            let code_left = codegen_parse_peg_expression(left);
+            let code_right = codegen_parse_peg_expression(right);
+
+            quote! {
+                if { #test_left } {
+                    #code_left
+                } else {
+                    #code_right
+                }
+            }
+        }
+        PegExpression::Repetition {
+            expr,
+            min: 0,
+            max: Some(1),
+        } => {
+            let code_test = codegen_lookahead_peg_expression(expr);
+            let code_expr = codegen_parse_peg_expression(expr);
+
+            quote! {
+                if { #code_test } {
+                    #code_expr
+                }
+            }
+        }
+        PegExpression::Repetition {
+            expr,
+            min: 0,
+            max: None,
+        } => {
+            let code_test = codegen_lookahead_peg_expression(expr);
+            let code_expr = codegen_parse_peg_expression(expr);
+
+            quote! {
+                while { #code_test } {
+                    #code_expr
+                }
+            }
+        }
+        PegExpression::Repetition {
+            expr,
+            min,
+            max: None,
+        } => {
+            let code_test = codegen_lookahead_peg_expression(expr);
+            let code_expr = codegen_parse_peg_expression(expr);
+
+            let prefix_code = std::iter::repeat_n(code_expr.clone(), *min as _);
+
+            quote! {
+                #( #prefix_code )*
+
+                while { #code_test } {
+                    #code_expr
+                }
+            }
+        }
+        PegExpression::Repetition {
+            expr,
+            min,
+            max: Some(max),
+        } => {
+            let code_test = codegen_lookahead_peg_expression(expr);
+            let code_expr = codegen_parse_peg_expression(expr);
+
+            let prefix_code = std::iter::repeat_n(code_expr.clone(), *min as _);
+
+            quote! {
+                #(#prefix_code)*
+
+                for _ in #min..=#max {
+                    if !{ #code_test } {
+                        break;
+                    }
+                    #code_expr
+                }
+            }
+        }
+        // Predicates don't result in token nodes.
+        PegExpression::Predicate { .. } => quote! {},
+        PegExpression::Anything => quote! {
+            self.tree.push_token(self.parser.eat(|_| true).unwrap());
+        },
+        PegExpression::Epsilon => quote! {},
+    }
+}
+
+fn codegen_lookahead_peg_expression(expr: &PegExpression) -> TokenStream {
+    let code_expr = codegen_test_peg_expression(expr, &quote! { true }, &quote! { false });
+    quote! {{
+        let before_lookahead = self.parser.mark();
+        match { #code_expr } {
+            true => {
+                self.parser.reset_to(before_lookahead);
+                true
+            },
+            false => false,
+        }
+    }}
 }
 
 fn codegen_test_peg_expression(

@@ -2,12 +2,23 @@ use std::{borrow::Borrow, collections::HashSet, hash::Hash, marker::PhantomData}
 
 use super::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ConcreteSyntaxTreeBuilder<K> {
     interner_trees: Interner<ConcreteSyntaxTree<K>>,
     interner_text: Interner<str>,
     stack: Vec<BuilderState<K>>,
     tree: Option<Arc<ConcreteSyntaxTree<K>>>,
+}
+
+impl<K> Default for ConcreteSyntaxTreeBuilder<K> {
+    fn default() -> Self {
+        Self {
+            interner_trees: Default::default(),
+            interner_text: Default::default(),
+            stack: Default::default(),
+            tree: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
