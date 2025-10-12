@@ -86,7 +86,7 @@ impl Display for PegTerminal {
             Self::Exact(lit) => {
                 write!(f, "\"")?;
                 for c in lit.chars() {
-                    write_char_escaped(f, c)?;
+                    write_char_escaped(f, c, true)?;
                 }
                 write!(f, "\"")
             }
@@ -94,11 +94,11 @@ impl Display for PegTerminal {
                 write!(f, "[")?;
                 for &(from, to) in ranges {
                     if from == to {
-                        write_char_escaped(f, from)?;
+                        write_char_escaped(f, from, false)?;
                     } else {
-                        write_char_escaped(f, from)?;
+                        write_char_escaped(f, from, false)?;
                         write!(f, "-")?;
-                        write_char_escaped(f, to)?;
+                        write_char_escaped(f, to, false)?;
                     }
                 }
                 write!(f, "]")
@@ -111,12 +111,16 @@ impl Display for PegTerminal {
     }
 }
 
-fn write_char_escaped(f: &mut Formatter, c: char) -> fmt::Result {
+fn write_char_escaped(f: &mut Formatter, c: char, escape_double_quote: bool) -> fmt::Result {
     if c.is_ascii() {
-        for cc in std::ascii::escape_default(c as u8) {
-            write!(f, "{}", cc as char)?;
+        match c {
+            '\t' => write!(f, "\\t"),
+            '\r' => write!(f, "\\r"),
+            '\n' => write!(f, "\\n"),
+            '"' if escape_double_quote => write!(f, "\\\""),
+            c if c > '\x7e' => write!(f, "\\x{:x}", c as u32),
+            c => write!(f, "{c}"),
         }
-        Ok(())
     } else {
         write!(f, "{c}")
     }
