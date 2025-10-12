@@ -4,9 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
 unicode-id-start.workspace = true
 quote.workspace = true
 proc-macro2.workspace = true
 pretty_assertions.workspace = true
+
