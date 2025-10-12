@@ -11,7 +11,10 @@ pub fn make_meta_grammar() -> PegGrammar {
 
         Expr, ExprChoice, ExprSeq, ExprPredicate, ExprRepeat, ExprAtom,
         RepeatOp,
-        Keyword, CharacterRanges,
+        Keyword,
+        CharacterRanges,
+        CharacterRangesIdent,
+        CharacterRangesRange,
 
         Whitespace, Comment, Trivia,
         EOL, EOF, EOKW,
@@ -32,14 +35,17 @@ pub fn make_meta_grammar() -> PegGrammar {
     ExprChoice += &ExprSeq + star(&SLASH_F + &ExprSeq);
     ExprSeq += plus(&ExprPredicate);
     ExprPredicate += opt(&AMPERSAND | &EXCLAMATION) + &ExprRepeat;
-    ExprRepeat += &ExprAtom + &RepeatOp;
+    ExprRepeat += &ExprAtom + opt(&RepeatOp);
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
     ExprAtom += &IDENT | &DOT | &Keyword | &CharacterRanges;
 
     RepeatOp += &STAR | &PLUS;
-    Keyword += &Trivia + "\"" + star("\\" + any() | not("\"" + any())) + "\"";
-    CharacterRanges +=
-        &Trivia + "[" + star(any() + "-" + not("!") + any() | not("]" + any())) + "]";
+    Keyword += &Trivia + "\"" + star("\\" + any() | not("\"") + any()) + "\"";
+
+    CharacterRanges += &Trivia + "[" + plus(&CharacterRangesRange | &CharacterRangesIdent) + "]";
+    CharacterRangesIdent += "\\" + any();
+    CharacterRangesIdent += not("]") + any();
+    CharacterRangesRange += &CharacterRangesIdent + "-" + &CharacterRangesIdent;
 
     Whitespace += plus(class(" \t\n\r"));
     Comment += "//" + star(not(&EOL) + any()) + &EOL;

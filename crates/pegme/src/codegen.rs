@@ -4,6 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
+    // Idents for the rule kind enum.
     let syntax_kind_ident = format_ident!("{name}Kind");
     let syntax_kind_variants = g
         .rule_names()
@@ -12,23 +13,46 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         .collect::<Vec<_>>();
     let parser_ident = format_ident!("{name}Parser");
 
+    // Idents for the various test/parse functions.
+    let parse_fn_idents = g
+        .rule_names()
+        .iter()
+        .map(|name| format_ident!("parse_{}", name.0))
+        .collect::<Vec<_>>();
+    let test_fn_idents = g
+        .rule_names()
+        .iter()
+        .map(|name| format_ident!("test_{}", name.0))
+        .collect::<Vec<_>>();
+
     // Generate entry point.
 
-    let entry_point_test_rule = format_ident!("test_{rule}");
-    let entry_point_parse_rule = format_ident!("parse_{rule}");
+    let entry_point_rule = format_ident!("{rule}");
     let entry_point = quote! {
-        pub fn parse(input: String) -> Arc<ConcreteSyntaxTree<#syntax_kind_ident>> {
+        pub fn parse(input: impl Into<String>) -> Arc<ConcreteSyntaxTree<#syntax_kind_ident>> {
+            parse_rule(input, #syntax_kind_ident::#entry_point_rule)
+        }
+
+        #[inline]
+        pub(crate) fn parse_rule(input: impl Into<String>, rule: #syntax_kind_ident) -> Arc<ConcreteSyntaxTree<#syntax_kind_ident>> {
             let mut parser_state = #parser_ident {
                 parser: PackratParser::new(input),
                 tree: ConcreteSyntaxTreeBuilder::default(),
             };
 
-            // Prime packrat.
-            let valid = parser_state.#entry_point_test_rule();
-            assert!(valid, "Couldn't parse {}", #rule);
+            match rule {
+                #(
+                    #syntax_kind_ident::#syntax_kind_variants => {
+                        // Prime packrat.
+                        let valid = parser_state.#test_fn_idents();
+                        assert!(valid, "Couldn't parse {}", #syntax_kind_ident::#syntax_kind_variants);
+                        parser_state.parser.reset();
 
-            parser_state.#entry_point_parse_rule();
-            parser_state.tree.build()
+                        parser_state.#parse_fn_idents();
+                        parser_state.tree.build()
+                    },
+                )*
+            }
         }
     };
 
@@ -40,14 +64,20 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         pub enum #syntax_kind_ident {
             #(#syntax_kind_variants,)*
         }
+
+        impl std::fmt::Display for #syntax_kind_ident {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{self:?}")
+            }
+        }
     };
 
     // Generate parser state struct.
 
     let parser_struct = quote! {
-        struct #parser_ident {
-            parser: PackratParser<#syntax_kind_ident>,
-            tree: ConcreteSyntaxTreeBuilder<#syntax_kind_ident>,
+        pub(crate) struct #parser_ident {
+            pub(crate) parser: PackratParser<#syntax_kind_ident>,
+            pub(crate) tree: ConcreteSyntaxTreeBuilder<#syntax_kind_ident>,
         }
     };
 
@@ -57,13 +87,15 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
 
     let mut parser_body = quote! {};
 
-    for rule_name in g.rule_names() {
+    for ((rule_name, parse_fn_ident), test_fn_ident) in g
+        .rule_names()
+        .iter()
+        .zip(parse_fn_idents)
+        .zip(test_fn_idents)
+    {
         let rule = g.rule_by_name(rule_name.0);
 
         let doc = format!("{rule}");
-        let parse_fn_ident = format_ident!("parse_{rule_name}");
-        let test_fn_ident = format_ident!("test_{rule_name}");
-
         let rule_kind = format_ident!("{rule_name}");
         let rule_kind = quote! { #syntax_kind_ident::#rule_kind };
 
@@ -71,7 +103,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
 
         parser_body.extend(quote! {
             #[doc = #doc]
-            fn #parse_fn_ident(&mut self) {
+            pub(crate) fn #parse_fn_ident(&mut self) {
                 let end = self.parser.memo(#rule_kind, self.parser.mark()).unwrap().unwrap();
                 let node = self.tree.start_node(#rule_kind);
 
@@ -82,9 +114,11 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
             }
         });
 
+        let name = rule_name.0;
+
         let test_body = codegen_test_peg_expression(
             rule.expr(),
-            &quote! {{}},
+            &quote! {{ tracing::trace!("Recognized rule {} at {:?}", #name, self.parser.mark()); }},
             &quote! {{
                 self.parser.memoize_miss(#rule_kind, start);
                 self.parser.reset_to(start);
@@ -94,7 +128,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
 
         parser_body.extend(quote! {
             #[doc = #doc]
-            fn #test_fn_ident(&mut self) -> bool {
+            pub(crate) fn #test_fn_ident(&mut self) -> bool {
                 let start = self.parser.mark();
 
                 match self.parser.memo(#rule_kind, start) {
@@ -115,6 +149,9 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     }
 
     quote! {
+        //! DO NOT EDIT.
+        //! This file is auto-generated.
+
         use std::sync::Arc;
         use crate::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
 
@@ -329,10 +366,19 @@ fn codegen_test_peg_expression(
         }
         PegExpression::Seq(left, right) => {
             let test_left = codegen_test_peg_expression(left, &quote! { true }, &quote! { false });
-            let test_right = codegen_test_peg_expression(right, fragment_success, fragment_failure);
+            let test_right =
+                codegen_test_peg_expression(right, &quote! { true }, &quote! { false });
+
             quote! {
+                let before_left = self.parser.mark();
                 match { #test_left } {
-                    true => { #test_right },
+                    true => match { #test_right } {
+                        true => #fragment_success,
+                        false => {
+                            self.parser.reset_to(before_left);
+                            #fragment_failure
+                        }
+                    },
                     false => #fragment_failure,
                 }
             }
