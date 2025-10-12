@@ -9,10 +9,10 @@ rule ExprPredicate = (AMPERSAND / EXCLAMATION)? ExprRepeat;
 rule ExprRepeat = ExprAtom RepeatOp?;
 rule ExprAtom = PAREN_L Expr PAREN_R / IDENT / DOT / Keyword / CharacterRanges;
 
-rule RepeatOp = STAR / PLUS;
+rule RepeatOp = STAR / PLUS / QUESTION;
 rule Keyword = Trivia "\"" ("\\" . / !"\"" .)* "\"";
 
-rule CharacterRanges = Trivia "[" (CharacterRangesRange | CharacterRangesIdent)+ "]";
+rule CharacterRanges = Trivia "[" (CharacterRangesRange / CharacterRangesIdent)+ "]";
 rule CharacterRangesIdent = "\\" . / !"]" .;
 rule CharacterRangesRange = CharacterRangesIdent "-" CharacterRangesIdent;
 
@@ -34,6 +34,7 @@ rule AMPERSAND = Trivia "&";
 rule EXCLAMATION = Trivia "!";
 rule STAR = Trivia "*";
 rule PLUS = Trivia "+";
+rule QUESTION = Trivia "?";
 rule COLON = Trivia ",";
 rule SEMICOLON = Trivia ";";
 rule PAREN_L = Trivia "(";

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::{
-    codegen::parser_for_grammar,
     cst::ConcreteSyntaxTree,
     meta::generated::{
         parse_rule,
@@ -873,6 +872,25 @@ fn expr_repeat_plus() {
             cst_node(
                 RepeatOp,
                 [cst_node(PLUS, [cst_node(Trivia, []), cst_leaf("+")])],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_repeat_question() {
+    let cst = parse_rule("uwu?", ExprRepeat);
+    let expected = cst_node(
+        ExprRepeat,
+        [
+            cst_node(
+                ExprAtom,
+                [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+            ),
+            cst_node(
+                RepeatOp,
+                [cst_node(QUESTION, [cst_node(Trivia, []), cst_leaf("?")])],
             ),
         ],
     );

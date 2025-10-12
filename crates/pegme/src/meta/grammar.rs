@@ -21,7 +21,7 @@ pub fn make_meta_grammar() -> PegGrammar {
 
         IDENT, KW, INTEGER,
         RULE,
-        EQUAL, SLASH_F, AMPERSAND, EXCLAMATION, STAR, PLUS, DOT,
+        EQUAL, SLASH_F, AMPERSAND, EXCLAMATION, STAR, PLUS, QUESTION, DOT,
         COLON, SEMICOLON,
         PAREN_L, PAREN_R,
         BRACES_L, BRACES_R,
@@ -39,7 +39,7 @@ pub fn make_meta_grammar() -> PegGrammar {
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
     ExprAtom += &IDENT | &DOT | &Keyword | &CharacterRanges;
 
-    RepeatOp += &STAR | &PLUS;
+    RepeatOp += &STAR | &PLUS | &QUESTION;
     Keyword += &Trivia + "\"" + star("\\" + any() | not("\"") + any()) + "\"";
 
     CharacterRanges += &Trivia + "[" + plus(&CharacterRangesRange | &CharacterRangesIdent) + "]";
@@ -65,6 +65,7 @@ pub fn make_meta_grammar() -> PegGrammar {
     EXCLAMATION += &Trivia + "!";
     STAR += &Trivia + "*";
     PLUS += &Trivia + "+";
+    QUESTION += &Trivia + "?";
     DOT += &Trivia + ".";
     COLON += &Trivia + ",";
     SEMICOLON += &Trivia + ";";

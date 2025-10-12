@@ -236,6 +236,13 @@ pub(crate) fn parse_rule(
             parser_state.parse_PLUS();
             parser_state.tree.build()
         }
+        MetaPegmeKind::QUESTION => {
+            let valid = parser_state.test_QUESTION();
+            assert!(valid, "Couldn't parse {}", MetaPegmeKind::QUESTION);
+            parser_state.parser.reset();
+            parser_state.parse_QUESTION();
+            parser_state.tree.build()
+        }
         MetaPegmeKind::DOT => {
             let valid = parser_state.test_DOT();
             assert!(valid, "Couldn't parse {}", MetaPegmeKind::DOT);
@@ -320,6 +327,7 @@ pub enum MetaPegmeKind {
     EXCLAMATION,
     STAR,
     PLUS,
+    QUESTION,
     DOT,
     COLON,
     SEMICOLON,
@@ -1307,7 +1315,7 @@ impl MetaPegmeParser {
             .memoize_match(MetaPegmeKind::ExprAtom, start, self.parser.mark());
         true
     }
-    #[doc = "(STAR / PLUS)"]
+    #[doc = "((STAR / PLUS) / QUESTION)"]
     pub(crate) fn parse_RepeatOp(&mut self) {
         let end = self
             .parser
@@ -1319,9 +1327,21 @@ impl MetaPegmeParser {
             {
                 let before_lookahead = self.parser.mark();
                 match {
-                    match self.test_STAR() {
+                    let before_left = self.parser.mark();
+                    match {
+                        match self.test_STAR() {
+                            true => true,
+                            false => false,
+                        }
+                    } {
                         true => true,
-                        false => false,
+                        false => {
+                            self.parser.reset_to(before_left);
+                            match self.test_PLUS() {
+                                true => true,
+                                false => false,
+                            }
+                        }
                     }
                 } {
                     true => {
@@ -1332,14 +1352,34 @@ impl MetaPegmeParser {
                 }
             }
         } {
-            self.parse_STAR();
+            if {
+                {
+                    let before_lookahead = self.parser.mark();
+                    match {
+                        match self.test_STAR() {
+                            true => true,
+                            false => false,
+                        }
+                    } {
+                        true => {
+                            self.parser.reset_to(before_lookahead);
+                            true
+                        }
+                        false => false,
+                    }
+                }
+            } {
+                self.parse_STAR();
+            } else {
+                self.parse_PLUS();
+            }
         } else {
-            self.parse_PLUS();
+            self.parse_QUESTION();
         }
         self.parser.reset_to(end);
         self.tree.finish_node(node);
     }
-    #[doc = "(STAR / PLUS)"]
+    #[doc = "((STAR / PLUS) / QUESTION)"]
     pub(crate) fn test_RepeatOp(&mut self) -> bool {
         let start = self.parser.mark();
         match self.parser.memo(MetaPegmeKind::RepeatOp, start) {
@@ -1352,9 +1392,21 @@ impl MetaPegmeParser {
         }
         let before_left = self.parser.mark();
         match {
-            match self.test_STAR() {
+            let before_left = self.parser.mark();
+            match {
+                match self.test_STAR() {
+                    true => true,
+                    false => false,
+                }
+            } {
                 true => true,
-                false => false,
+                false => {
+                    self.parser.reset_to(before_left);
+                    match self.test_PLUS() {
+                        true => true,
+                        false => false,
+                    }
+                }
             }
         } {
             true => {
@@ -1362,7 +1414,7 @@ impl MetaPegmeParser {
             }
             false => {
                 self.parser.reset_to(before_left);
-                match self.test_PLUS() {
+                match self.test_QUESTION() {
                     true => {
                         tracing::trace!(
                             "Recognized rule {} at {:?}",
@@ -3446,6 +3498,66 @@ impl MetaPegmeParser {
         };
         self.parser
             .memoize_match(MetaPegmeKind::PLUS, start, self.parser.mark());
+        true
+    }
+    #[doc = "Trivia \"?\""]
+    pub(crate) fn parse_QUESTION(&mut self) {
+        let end = self
+            .parser
+            .memo(MetaPegmeKind::QUESTION, self.parser.mark())
+            .unwrap()
+            .unwrap();
+        let node = self.tree.start_node(MetaPegmeKind::QUESTION);
+        self.parse_Trivia();
+        self.parser.expect("?");
+        self.tree.push_tokens("?");
+        self.parser.reset_to(end);
+        self.tree.finish_node(node);
+    }
+    #[doc = "Trivia \"?\""]
+    pub(crate) fn test_QUESTION(&mut self) -> bool {
+        let start = self.parser.mark();
+        match self.parser.memo(MetaPegmeKind::QUESTION, start) {
+            Some(Some(end)) => {
+                self.parser.reset_to(end);
+                return true;
+            }
+            Some(None) => return false,
+            None => {}
+        }
+        let before_left = self.parser.mark();
+        match {
+            match self.test_Trivia() {
+                true => true,
+                false => false,
+            }
+        } {
+            true => match {
+                match self.parser.expect("?") {
+                    true => true,
+                    false => false,
+                }
+            } {
+                true => {
+                    tracing::trace!("Recognized rule {} at {:?}", "QUESTION", self.parser.mark());
+                }
+                false => {
+                    self.parser.reset_to(before_left);
+                    {
+                        self.parser.memoize_miss(MetaPegmeKind::QUESTION, start);
+                        self.parser.reset_to(start);
+                        return false;
+                    }
+                }
+            },
+            false => {
+                self.parser.memoize_miss(MetaPegmeKind::QUESTION, start);
+                self.parser.reset_to(start);
+                return false;
+            }
+        };
+        self.parser
+            .memoize_match(MetaPegmeKind::QUESTION, start, self.parser.mark());
         true
     }
     #[doc = "Trivia \".\""]
