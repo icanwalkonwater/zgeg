@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
 use crate::{
+    codegen::parser_for_grammar,
     cst::ConcreteSyntaxTree,
-    meta::generated::{parse_rule, MetaPegmeKind, MetaPegmeKind::*},
+    meta::generated::{
+        parse_rule,
+        MetaPegmeKind::{self, *},
+    },
 };
 
 fn cst_node<const N: usize>(
@@ -17,6 +21,814 @@ fn cst_leaf(s: &str) -> ConcreteSyntaxTree<MetaPegmeKind> {
 }
 
 #[test]
+fn file_empty() {
+    let cst = parse_rule("", File);
+    let expected = cst_node(File, [cst_node(Trivia, []), cst_node(EOF, [])]);
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn file_two_rules() {
+    let cst = parse_rule("// Hello\nrule One = a;\nrule Two = b;", File);
+    let expected = cst_node(
+        File,
+        [
+            cst_node(
+                Rule,
+                [
+                    cst_node(
+                        RuleKind,
+                        [cst_node(
+                            RULE,
+                            [
+                                cst_node(
+                                    Trivia,
+                                    [cst_node(
+                                        Comment,
+                                        [cst_leaf("// Hello"), cst_node(EOL, [cst_leaf("\n")])],
+                                    )],
+                                ),
+                                cst_leaf("rule"),
+                            ],
+                        )],
+                    ),
+                    cst_node(
+                        IDENT,
+                        [
+                            cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                            cst_leaf("One"),
+                        ],
+                    ),
+                    cst_node(
+                        EQUAL,
+                        [
+                            cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                            cst_leaf("="),
+                        ],
+                    ),
+                    cst_node(
+                        Expr,
+                        [cst_node(
+                            ExprChoice,
+                            [cst_node(
+                                ExprSeq,
+                                [cst_node(
+                                    ExprPredicate,
+                                    [cst_node(
+                                        ExprRepeat,
+                                        [cst_node(
+                                            ExprAtom,
+                                            [cst_node(
+                                                IDENT,
+                                                [
+                                                    cst_node(
+                                                        Trivia,
+                                                        [cst_node(Whitespace, [cst_leaf(" ")])],
+                                                    ),
+                                                    cst_leaf("a"),
+                                                ],
+                                            )],
+                                        )],
+                                    )],
+                                )],
+                            )],
+                        )],
+                    ),
+                    cst_node(SEMICOLON, [cst_node(Trivia, []), cst_leaf(";")]),
+                ],
+            ),
+            cst_node(
+                Rule,
+                [
+                    cst_node(
+                        RuleKind,
+                        [cst_node(
+                            RULE,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf("\n")])]),
+                                cst_leaf("rule"),
+                            ],
+                        )],
+                    ),
+                    cst_node(
+                        IDENT,
+                        [
+                            cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                            cst_leaf("Two"),
+                        ],
+                    ),
+                    cst_node(
+                        EQUAL,
+                        [
+                            cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                            cst_leaf("="),
+                        ],
+                    ),
+                    cst_node(
+                        Expr,
+                        [cst_node(
+                            ExprChoice,
+                            [cst_node(
+                                ExprSeq,
+                                [cst_node(
+                                    ExprPredicate,
+                                    [cst_node(
+                                        ExprRepeat,
+                                        [cst_node(
+                                            ExprAtom,
+                                            [cst_node(
+                                                IDENT,
+                                                [
+                                                    cst_node(
+                                                        Trivia,
+                                                        [cst_node(Whitespace, [cst_leaf(" ")])],
+                                                    ),
+                                                    cst_leaf("b"),
+                                                ],
+                                            )],
+                                        )],
+                                    )],
+                                )],
+                            )],
+                        )],
+                    ),
+                    cst_node(SEMICOLON, [cst_node(Trivia, []), cst_leaf(";")]),
+                ],
+            ),
+            cst_node(Trivia, []),
+            cst_node(EOF, []),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn rule_simple() {
+    let cst = parse_rule("rule Hello = Hello;", Rule);
+    let expected = cst_node(
+        Rule,
+        [
+            cst_node(
+                RuleKind,
+                [cst_node(RULE, [cst_node(Trivia, []), cst_leaf("rule")])],
+            ),
+            cst_node(
+                IDENT,
+                [
+                    cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                    cst_leaf("Hello"),
+                ],
+            ),
+            cst_node(
+                EQUAL,
+                [
+                    cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                    cst_leaf("="),
+                ],
+            ),
+            cst_node(
+                Expr,
+                [cst_node(
+                    ExprChoice,
+                    [cst_node(
+                        ExprSeq,
+                        [cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [cst_node(
+                                    ExprAtom,
+                                    [cst_node(
+                                        IDENT,
+                                        [
+                                            cst_node(
+                                                Trivia,
+                                                [cst_node(Whitespace, [cst_leaf(" ")])],
+                                            ),
+                                            cst_leaf("Hello"),
+                                        ],
+                                    )],
+                                )],
+                            )],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(SEMICOLON, [cst_node(Trivia, []), cst_leaf(";")]),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_atom() {
+    let cst = parse_rule("uwu", Expr);
+    let expected = cst_node(
+        Expr,
+        [cst_node(
+            ExprChoice,
+            [cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                        )],
+                    )],
+                )],
+            )],
+        )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_bullshit() {
+    let cst = parse_rule("a b / !c d d* (e / &f g)", Expr);
+    let expected = cst_node(
+        Expr,
+        [cst_node(
+            ExprChoice,
+            [
+                // a b
+                cst_node(
+                    ExprSeq,
+                    [
+                        // a
+                        cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [cst_node(
+                                    ExprAtom,
+                                    [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("a")])],
+                                )],
+                            )],
+                        ),
+                        // b
+                        cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [cst_node(
+                                    ExprAtom,
+                                    [cst_node(
+                                        IDENT,
+                                        [
+                                            cst_node(
+                                                Trivia,
+                                                [cst_node(Whitespace, [cst_leaf(" ")])],
+                                            ),
+                                            cst_leaf("b"),
+                                        ],
+                                    )],
+                                )],
+                            )],
+                        ),
+                    ],
+                ),
+                cst_node(
+                    SLASH_F,
+                    [
+                        cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                        cst_leaf("/"),
+                    ],
+                ),
+                cst_node(
+                    ExprSeq,
+                    [
+                        // !c
+                        cst_node(
+                            ExprPredicate,
+                            [
+                                cst_node(
+                                    EXCLAMATION,
+                                    [
+                                        cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                        cst_leaf("!"),
+                                    ],
+                                ),
+                                // c
+                                cst_node(
+                                    ExprRepeat,
+                                    [cst_node(
+                                        ExprAtom,
+                                        [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("c")])],
+                                    )],
+                                ),
+                            ],
+                        ),
+                        // d
+                        cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [cst_node(
+                                    ExprAtom,
+                                    [cst_node(
+                                        IDENT,
+                                        [
+                                            cst_node(
+                                                Trivia,
+                                                [cst_node(Whitespace, [cst_leaf(" ")])],
+                                            ),
+                                            cst_leaf("d"),
+                                        ],
+                                    )],
+                                )],
+                            )],
+                        ),
+                        // d*
+                        cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [
+                                    cst_node(
+                                        ExprAtom,
+                                        [cst_node(
+                                            IDENT,
+                                            [
+                                                cst_node(
+                                                    Trivia,
+                                                    [cst_node(Whitespace, [cst_leaf(" ")])],
+                                                ),
+                                                cst_leaf("d"),
+                                            ],
+                                        )],
+                                    ),
+                                    cst_node(
+                                        RepeatOp,
+                                        [cst_node(STAR, [cst_node(Trivia, []), cst_leaf("*")])],
+                                    ),
+                                ],
+                            )],
+                        ),
+                        // (e / &f g)
+                        cst_node(
+                            ExprPredicate,
+                            [cst_node(
+                                ExprRepeat,
+                                [cst_node(
+                                    ExprAtom,
+                                    [
+                                        cst_node(
+                                            PAREN_L,
+                                            [
+                                                cst_node(
+                                                    Trivia,
+                                                    [cst_node(Whitespace, [cst_leaf(" ")])],
+                                                ),
+                                                cst_leaf("("),
+                                            ],
+                                        ),
+                                        // e / &f g
+                                        cst_node(
+                                            Expr,
+                                            [cst_node(
+                                                ExprChoice,
+                                                [
+                                                    // e
+                                                    cst_node(
+                                                        ExprSeq,
+                                                        [cst_node(
+                                                            ExprPredicate,
+                                                            [cst_node(
+                                                                ExprRepeat,
+                                                                [cst_node(
+                                                                    ExprAtom,
+                                                                    [cst_node(
+                                                                        IDENT,
+                                                                        [
+                                                                            cst_node(Trivia, []),
+                                                                            cst_leaf("e"),
+                                                                        ],
+                                                                    )],
+                                                                )],
+                                                            )],
+                                                        )],
+                                                    ),
+                                                    cst_node(
+                                                        SLASH_F,
+                                                        [
+                                                            cst_node(
+                                                                Trivia,
+                                                                [cst_node(
+                                                                    Whitespace,
+                                                                    [cst_leaf(" ")],
+                                                                )],
+                                                            ),
+                                                            cst_leaf("/"),
+                                                        ],
+                                                    ),
+                                                    // &f g
+                                                    cst_node(
+                                                        ExprSeq,
+                                                        [
+                                                            // &f
+                                                            cst_node(
+                                                                ExprPredicate,
+                                                                [
+                                                                    cst_node(
+                                                                        AMPERSAND,
+                                                                        [
+                                                                            cst_node(
+                                                                                Trivia,
+                                                                                [cst_node(
+                                                                                    Whitespace,
+                                                                                    [cst_leaf(" ")],
+                                                                                )],
+                                                                            ),
+                                                                            cst_leaf("&"),
+                                                                        ],
+                                                                    ),
+                                                                    // f
+                                                                    cst_node(
+                                                                        ExprRepeat,
+                                                                        [cst_node(
+                                                                            ExprAtom,
+                                                                            [cst_node(
+                                                                                IDENT,
+                                                                                [
+                                                                                    cst_node(
+                                                                                        Trivia,
+                                                                                        [],
+                                                                                    ),
+                                                                                    cst_leaf("f"),
+                                                                                ],
+                                                                            )],
+                                                                        )],
+                                                                    ),
+                                                                ],
+                                                            ),
+                                                            // g
+                                                            cst_node(
+                                                                ExprPredicate,
+                                                                [cst_node(
+                                                                    ExprRepeat,
+                                                                    [cst_node(
+                                                                        ExprAtom,
+                                                                        [cst_node(
+                                                                            IDENT,
+                                                                            [
+                                                                                cst_node(
+                                                                                    Trivia,
+                                                                                    [cst_node(
+                                                                                        Whitespace,
+                                                                                        [cst_leaf(
+                                                                                            " ",
+                                                                                        )],
+                                                                                    )],
+                                                                                ),
+                                                                                cst_leaf("g"),
+                                                                            ],
+                                                                        )],
+                                                                    )],
+                                                                )],
+                                                            ),
+                                                        ],
+                                                    ),
+                                                ],
+                                            )],
+                                        ),
+                                        cst_node(PAREN_R, [cst_node(Trivia, []), cst_leaf(")")]),
+                                    ],
+                                )],
+                            )],
+                        ),
+                    ],
+                ),
+            ],
+        )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_choice_atom() {
+    let cst = parse_rule("uwu", ExprChoice);
+    let expected = cst_node(
+        ExprChoice,
+        [cst_node(
+            ExprSeq,
+            [cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                    )],
+                )],
+            )],
+        )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_choice_two() {
+    let cst = parse_rule("uwu/owo", ExprChoice);
+    let expected = cst_node(
+        ExprChoice,
+        [
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(SLASH_F, [cst_node(Trivia, []), cst_leaf("/")]),
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("owo")])],
+                        )],
+                    )],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_choice_many() {
+    let cst = parse_rule("uwu/owo/iwi/awa", ExprChoice);
+    let expected = cst_node(
+        ExprChoice,
+        [
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(SLASH_F, [cst_node(Trivia, []), cst_leaf("/")]),
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("owo")])],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(SLASH_F, [cst_node(Trivia, []), cst_leaf("/")]),
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("iwi")])],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(SLASH_F, [cst_node(Trivia, []), cst_leaf("/")]),
+            cst_node(
+                ExprSeq,
+                [cst_node(
+                    ExprPredicate,
+                    [cst_node(
+                        ExprRepeat,
+                        [cst_node(
+                            ExprAtom,
+                            [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("awa")])],
+                        )],
+                    )],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_seq_atom() {
+    let cst = parse_rule("uwu", ExprSeq);
+    let expected = cst_node(
+        ExprSeq,
+        [cst_node(
+            ExprPredicate,
+            [cst_node(
+                ExprRepeat,
+                [cst_node(
+                    ExprAtom,
+                    [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                )],
+            )],
+        )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_seq_two() {
+    let cst = parse_rule("uwu owo", ExprSeq);
+    let expected = cst_node(
+        ExprSeq,
+        [
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                    )],
+                )],
+            ),
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(
+                            IDENT,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                cst_leaf("owo"),
+                            ],
+                        )],
+                    )],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_seq_a_lot() {
+    let cst = parse_rule("uwu owo iwi ewe awa", ExprSeq);
+    let expected = cst_node(
+        ExprSeq,
+        [
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                    )],
+                )],
+            ),
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(
+                            IDENT,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                cst_leaf("owo"),
+                            ],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(
+                            IDENT,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                cst_leaf("iwi"),
+                            ],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(
+                            IDENT,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                cst_leaf("ewe"),
+                            ],
+                        )],
+                    )],
+                )],
+            ),
+            cst_node(
+                ExprPredicate,
+                [cst_node(
+                    ExprRepeat,
+                    [cst_node(
+                        ExprAtom,
+                        [cst_node(
+                            IDENT,
+                            [
+                                cst_node(Trivia, [cst_node(Whitespace, [cst_leaf(" ")])]),
+                                cst_leaf("awa"),
+                            ],
+                        )],
+                    )],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_predicate_atom() {
+    let cst = parse_rule("uwu", ExprPredicate);
+    let expected = cst_node(
+        ExprPredicate,
+        [cst_node(
+            ExprRepeat,
+            [cst_node(
+                ExprAtom,
+                [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+            )],
+        )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_predicate_postive() {
+    let cst = parse_rule("&uwu", ExprPredicate);
+    let expected = cst_node(
+        ExprPredicate,
+        [
+            cst_node(AMPERSAND, [cst_node(Trivia, []), cst_leaf("&")]),
+            cst_node(
+                ExprRepeat,
+                [cst_node(
+                    ExprAtom,
+                    [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_predicate_negative() {
+    let cst = parse_rule("!uwu", ExprPredicate);
+    let expected = cst_node(
+        ExprPredicate,
+        [
+            cst_node(EXCLAMATION, [cst_node(Trivia, []), cst_leaf("!")]),
+            cst_node(
+                ExprRepeat,
+                [cst_node(
+                    ExprAtom,
+                    [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+                )],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
 fn expr_repeat_atom() {
     let cst = parse_rule("uwu", ExprRepeat);
     let expected = cst_node(
@@ -25,6 +837,44 @@ fn expr_repeat_atom() {
             ExprAtom,
             [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
         )],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_repeat_star() {
+    let cst = parse_rule("uwu*", ExprRepeat);
+    let expected = cst_node(
+        ExprRepeat,
+        [
+            cst_node(
+                ExprAtom,
+                [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+            ),
+            cst_node(
+                RepeatOp,
+                [cst_node(STAR, [cst_node(Trivia, []), cst_leaf("*")])],
+            ),
+        ],
+    );
+    pretty_assertions::assert_eq!(*cst, expected);
+}
+
+#[test]
+fn expr_repeat_plus() {
+    let cst = parse_rule("uwu+", ExprRepeat);
+    let expected = cst_node(
+        ExprRepeat,
+        [
+            cst_node(
+                ExprAtom,
+                [cst_node(IDENT, [cst_node(Trivia, []), cst_leaf("uwu")])],
+            ),
+            cst_node(
+                RepeatOp,
+                [cst_node(PLUS, [cst_node(Trivia, []), cst_leaf("+")])],
+            ),
+        ],
     );
     pretty_assertions::assert_eq!(*cst, expected);
 }
