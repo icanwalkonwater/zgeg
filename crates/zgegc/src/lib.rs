@@ -1,1 +1,3 @@
-pub mod parser;
+pub mod parser {
+    include!(concat!(env!("OUT_DIR"), "/parser.rs"));
+}

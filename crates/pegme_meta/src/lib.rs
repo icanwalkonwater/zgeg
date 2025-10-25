@@ -7,10 +7,15 @@ use pegme_core::{
 mod parser {
     include!(concat!(env!("OUT_DIR"), "/parser.rs"));
 }
-pub use parser::{parse, MetaPegmeKind};
+pub use parser::{parse as parse_as_cst, MetaPegmeKind};
 
 #[cfg(test)]
 mod tests;
+
+pub fn parse(input: impl Into<String>) -> Result<PegGrammar, Box<dyn std::error::Error>> {
+    let cst = parse_as_cst(input);
+    Ok(cst_to_grammar(&cst))
+}
 
 pub fn cst_to_grammar(cst: &ConcreteSyntaxTree<MetaPegmeKind>) -> PegGrammar {
     assert_eq!(MetaPegmeKind::File, cst.kind().unwrap());

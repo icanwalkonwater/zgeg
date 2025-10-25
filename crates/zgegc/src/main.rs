@@ -7,7 +7,13 @@ struct AppArgs {
     src: PathBuf,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = AppArgs::parse();
-    dbg!(args);
+    dbg!(&args);
+
+    let input = std::fs::read_to_string(&args.src)?;
+
+    let cst = zgegc::parser::parse(input);
+    dbg!(cst);
+    Ok(())
 }

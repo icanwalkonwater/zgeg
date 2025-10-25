@@ -6,10 +6,10 @@ rule Block = BRACES_L Statement* BRACES_R;
 rule Statement = Expr SEMICOLON;
 
 rule Expr = ExprOpPrefix? ExprAtom ExprOpPostfix? (ExprOpInfix Expr)?;
-rule ExprAtom = PAREN_L Expr PAREN_R / Number / String / FunctionCall / Ident;
+rule ExprAtom = PAREN_L Expr PAREN_R / Number / String / FunctionCall / IDENT;
 rule ExprOpInfix = PLUS / HYPHEN / STAR / SLASH_F;
 rule ExprOpPrefix = PLUS / HYPHEN;
-rule ExprOpSuffix = QUESTION_MARK;
+rule ExprOpPostfix = QUESTION_MARK;
 
 rule FunctionCall = IDENT PAREN_L (Expr COMMA)* (Expr COMMA?)? PAREN_R;
 
@@ -20,7 +20,7 @@ rule INTEGER = Trivia [0-9]+ ![a-zA-Z0-9];
 rule FLOATING = Trivia [0-9]+ "." [0-9]* [fF] ![a-zA-Z0-9];
 
 rule String = STRING_LITERAL;
-rule STRING_LITERAL = Trivia "\"" (!"'" .)* "\"";
+rule STRING_LITERAL = Trivia "\"" (!"\"" .)* "\"";
 
 rule Whitespace = [ \t\n\r];
 rule Comment = "//" (!EOL .)* EOL;

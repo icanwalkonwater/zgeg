@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 pub struct CodegenOptions {
-    pegme_core_import: String,
+    pub pegme_core_import: String,
 }
 
 impl Default for CodegenOptions {

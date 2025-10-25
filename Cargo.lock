@@ -545,4 +545,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "pegme",
+ "pegme_codegen",
+ "tracing",
 ]
