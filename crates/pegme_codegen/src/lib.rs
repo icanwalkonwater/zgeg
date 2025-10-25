@@ -3,15 +3,32 @@ use pegme_core::grammar::{PegExpression, PegGrammar, PegTerminal};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
+pub struct CodegenOptions {
+    pegme_core_import: String,
+}
+
+impl Default for CodegenOptions {
+    fn default() -> Self {
+        Self {
+            pegme_core_import: "pegme_core".into(),
+        }
+    }
+}
+
+pub fn parser_for_grammar(
+    g: &PegGrammar,
+    parser_name: String,
+    start_rule: &str,
+    CodegenOptions { pegme_core_import }: CodegenOptions,
+) -> String {
     // Idents for the rule kind enum.
-    let syntax_kind_ident = format_ident!("{name}Kind");
+    let syntax_kind_ident = format_ident!("{parser_name}Kind");
     let syntax_kind_variants = g
         .rule_names()
         .iter()
         .map(|name| format_ident!("{}", *name.0))
         .collect::<Vec<_>>();
-    let parser_ident = format_ident!("{name}Parser");
+    let parser_ident = format_ident!("{parser_name}Parser");
 
     // Idents for the various test/parse functions.
     let parse_fn_idents = g
@@ -27,7 +44,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
 
     // Generate entry point.
 
-    let entry_point_rule = format_ident!("{rule}");
+    let entry_point_rule = format_ident!("{start_rule}");
     let entry_point = quote! {
         pub fn parse(input: impl Into<String>) -> Arc<ConcreteSyntaxTree<#syntax_kind_ident>> {
             parse_rule(input, #syntax_kind_ident::#entry_point_rule)
@@ -148,12 +165,14 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         });
     }
 
+    let import = quote::format_ident!("{pegme_core_import}");
+
     let file: syn::File = syn::parse_quote! {
         // DO NOT EDIT.
         // This file is auto-generated.
 
         use std::sync::Arc;
-        use pegme_core::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
+        use #import::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
 
         #entry_point
         #syntax_kind_enum
