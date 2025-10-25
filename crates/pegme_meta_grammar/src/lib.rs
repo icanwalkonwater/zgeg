@@ -10,7 +10,6 @@ pub fn make_meta_grammar() -> PegGrammar {
 
         Expr, ExprChoice, ExprSeq, ExprPredicate, ExprRepeat, ExprAtom,
         RepeatOp,
-        Keyword,
         CharacterRanges,
         CharacterRangesIdent,
         CharacterRangesRange,
@@ -18,7 +17,7 @@ pub fn make_meta_grammar() -> PegGrammar {
         Whitespace, Comment, Trivia,
         EOL, EOF, EOKW,
 
-        IDENT, KW, INTEGER,
+        LITERAL_KEYWORD, IDENT, KW, INTEGER,
         RULE,
         EQUAL, SLASH_F, AMPERSAND, EXCLAMATION, STAR, PLUS, QUESTION, DOT,
         COLON, SEMICOLON,
@@ -36,10 +35,9 @@ pub fn make_meta_grammar() -> PegGrammar {
     ExprPredicate += opt(&AMPERSAND | &EXCLAMATION) + &ExprRepeat;
     ExprRepeat += &ExprAtom + opt(&RepeatOp);
     ExprAtom += &PAREN_L + &Expr + &PAREN_R;
-    ExprAtom += &IDENT | &DOT | &Keyword | &CharacterRanges;
+    ExprAtom += &IDENT | &DOT | &LITERAL_KEYWORD | &CharacterRanges;
 
     RepeatOp += &STAR | &PLUS | &QUESTION;
-    Keyword += &Trivia + "\"" + star("\\" + any() | not("\"") + any()) + "\"";
 
     CharacterRanges += &Trivia + "[" + plus(&CharacterRangesRange | &CharacterRangesIdent) + "]";
     CharacterRangesIdent += "\\" + any();
@@ -53,6 +51,7 @@ pub fn make_meta_grammar() -> PegGrammar {
     EOF += not(any());
     EOKW += not(class("a-zA-Z0-9_"));
 
+    LITERAL_KEYWORD += &Trivia + "\"" + star("\\" + any() | not("\"") + any()) + "\"";
     IDENT += &Trivia + not(&KW) + class("a-zA-Z_") + star(class("a-zA-Z0-9_"));
     KW += &RULE;
     INTEGER += &Trivia + plus(class("0-9")) + not(class("a-zA-Z0-9_"));

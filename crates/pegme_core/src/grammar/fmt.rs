@@ -117,6 +117,7 @@ fn write_char_escaped(f: &mut Formatter, c: char, escape_double_quote: bool) -> 
             '\t' => write!(f, "\\t"),
             '\r' => write!(f, "\\r"),
             '\n' => write!(f, "\\n"),
+            '\\' => write!(f, "\\\\"),
             '"' if escape_double_quote => write!(f, "\\\""),
             c if c > '\x7e' => write!(f, "\\x{:x}", c as u32),
             c => write!(f, "{c}"),

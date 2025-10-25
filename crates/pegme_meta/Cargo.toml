@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 pegme_core = { path = "../pegme_core" }
+indexmap.workspace = true
 # Needed by generated code
 tracing.workspace = true
 

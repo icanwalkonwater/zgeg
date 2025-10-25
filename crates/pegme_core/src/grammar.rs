@@ -1,3 +1,5 @@
+use std::{borrow::Cow, sync::Arc};
+
 use indexmap::IndexMap;
 
 pub mod dsl;
@@ -19,11 +21,11 @@ impl PegGrammar {
     }
 
     pub fn rule_names(&self) -> Vec<PegRuleName> {
-        self.rules.keys().copied().collect()
+        self.rules.keys().cloned().collect()
     }
 
-    pub fn rule_by_name(&self, name: &'static str) -> &PegRule {
-        self.rule(PegRuleName(name))
+    pub fn rule_by_name(&self, name: &str) -> &PegRule {
+        self.rule(PegRuleName(name.into()))
     }
 
     pub fn rule(&self, name: PegRuleName) -> &PegRule {
@@ -31,14 +33,8 @@ impl PegGrammar {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PegRuleName(pub(crate) &'static str);
-
-impl PegRuleName {
-    pub fn as_str(&self) -> &'static str {
-        self.0
-    }
-}
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PegRuleName(pub Arc<str>);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegRule {
@@ -71,7 +67,7 @@ impl PegRule {
 pub enum PegExpression {
     Terminal(PegTerminal),
     Rule(PegRuleName),
-    Named(&'static str, Box<PegExpression>),
+    Named(Arc<str>, Box<PegExpression>),
     Seq(Box<PegExpression>, Box<PegExpression>),
     Choice(Box<PegExpression>, Box<PegExpression>),
     Repetition {
@@ -89,7 +85,7 @@ pub enum PegExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PegTerminal {
-    Exact(&'static str),
+    Exact(String),
     CharacterRanges(Vec<(char, char)>),
     PredefinedAscii,
     PredefinedUtf8Whitespace,
@@ -98,8 +94,8 @@ pub enum PegTerminal {
 }
 
 impl PegExpression {
-    pub fn exact(kw: &'static str) -> Self {
-        Self::Terminal(PegTerminal::Exact(kw))
+    pub fn exact(kw: impl Into<String>) -> Self {
+        Self::Terminal(PegTerminal::Exact(kw.into()))
     }
 
     pub fn range(from: char, to: char) -> Self {
@@ -126,12 +122,12 @@ impl PegExpression {
         Self::Terminal(PegTerminal::PredefinedUtf8XidContinue)
     }
 
-    pub fn rule(name: &'static str) -> Self {
-        Self::Rule(PegRuleName(name))
+    pub fn rule(name: &str) -> Self {
+        Self::Rule(PegRuleName(name.into()))
     }
 
-    pub fn named(name: &'static str, expr: impl Into<Box<PegExpression>>) -> Self {
-        Self::Named(name, expr.into())
+    pub fn named(name: &str, expr: impl Into<Box<PegExpression>>) -> Self {
+        Self::Named(name.into(), expr.into())
     }
 
     pub fn seq(left: impl Into<Box<PegExpression>>, right: impl Into<Box<PegExpression>>) -> Self {
@@ -236,7 +232,7 @@ mod tests {
                 ),
             ]
             .into_iter()
-            .map(|(n, r)| (PegRuleName(n), r))
+            .map(|(n, r)| (PegRuleName(n.into()), r))
             .collect(),
         )
         .unwrap()

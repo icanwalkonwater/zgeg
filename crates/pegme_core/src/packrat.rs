@@ -6,7 +6,7 @@ pub struct PackratParser<R = &'static str> {
     memos: HashMap<(R, PackratMark), Option<PackratMark>>,
 }
 
-impl<R: Copy + Hash + Eq> PackratParser<R> {
+impl<R: Clone + Hash + Eq> PackratParser<R> {
     pub fn new(input: impl Into<String>) -> Self {
         Self {
             input: input.into(),

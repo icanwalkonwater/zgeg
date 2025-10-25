@@ -9,7 +9,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     let syntax_kind_variants = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("{}", name.as_str()))
+        .map(|name| format_ident!("{}", *name.0))
         .collect::<Vec<_>>();
     let parser_ident = format_ident!("{name}Parser");
 
@@ -17,12 +17,12 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     let parse_fn_idents = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("parse_{}", name.as_str()))
+        .map(|name| format_ident!("parse_{}", *name.0))
         .collect::<Vec<_>>();
     let test_fn_idents = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("test_{}", name.as_str()))
+        .map(|name| format_ident!("test_{}", *name.0))
         .collect::<Vec<_>>();
 
     // Generate entry point.
@@ -93,7 +93,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         .zip(parse_fn_idents)
         .zip(test_fn_idents)
     {
-        let rule = g.rule_by_name(rule_name.as_str());
+        let rule = g.rule_by_name(&rule_name.0);
 
         let doc = format!("{rule}");
         let rule_kind = format_ident!("{rule_name}");
@@ -114,7 +114,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
             }
         });
 
-        let name = rule_name.as_str();
+        let name = &*rule_name.0;
 
         let test_body = codegen_test_peg_expression(
             rule.expr(),

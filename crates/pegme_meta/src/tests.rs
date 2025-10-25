@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pegme_core::cst::ConcreteSyntaxTree;
 
-use crate::{
+use crate::parser::{
     parse_rule,
     MetaPegmeKind::{self, *},
 };
@@ -954,7 +954,7 @@ fn expr_atom_keyword() {
     let expected = cst_node(
         ExprAtom,
         [cst_node(
-            Keyword,
+            LITERAL_KEYWORD,
             [cst_node(Trivia, []), cst_leaf("\"uwu\"")],
         )],
     );
@@ -981,15 +981,21 @@ fn trivia() {
 
 #[test]
 fn keyword_simple() {
-    let cst = parse_rule("\"hello\"", Keyword);
-    let expected = cst_node(Keyword, [cst_node(Trivia, []), cst_leaf("\"hello\"")]);
+    let cst = parse_rule("\"hello\"", LITERAL_KEYWORD);
+    let expected = cst_node(
+        LITERAL_KEYWORD,
+        [cst_node(Trivia, []), cst_leaf("\"hello\"")],
+    );
     pretty_assertions::assert_eq!(*cst, expected);
 }
 
 #[test]
 fn keyword_escaped() {
-    let cst = parse_rule("\"he\\\"llo\"", Keyword);
-    let expected = cst_node(Keyword, [cst_node(Trivia, []), cst_leaf("\"he\\\"llo\"")]);
+    let cst = parse_rule("\"he\\\"llo\"", LITERAL_KEYWORD);
+    let expected = cst_node(
+        LITERAL_KEYWORD,
+        [cst_node(Trivia, []), cst_leaf("\"he\\\"llo\"")],
+    );
     pretty_assertions::assert_eq!(*cst, expected);
 }
 

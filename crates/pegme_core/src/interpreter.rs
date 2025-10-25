@@ -12,7 +12,7 @@ pub fn parse_with_grammar(
     g: &PegGrammar,
     root: &'static str,
     input: String,
-) -> Option<Arc<ConcreteSyntaxTree<&'static str>>> {
+) -> Option<Arc<ConcreteSyntaxTree<Arc<str>>>> {
     let mut state = InterpreterState {
         grammar: g,
         parser: PackratParser::new(input),
@@ -20,7 +20,7 @@ pub fn parse_with_grammar(
     };
 
     // This also initializes the packrat memos.
-    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root)), false);
+    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root.into())), false);
 
     if !matches {
         println!("No match");
@@ -29,7 +29,7 @@ pub fn parse_with_grammar(
 
     // Build the CST.
     state.parser.reset();
-    state.parse_rule(PegRuleName(root));
+    state.parse_rule(PegRuleName(root.into()));
 
     Some(state.tree.build())
 }
@@ -37,7 +37,7 @@ pub fn parse_with_grammar(
 struct InterpreterState<'g> {
     grammar: &'g PegGrammar,
     parser: PackratParser<PegRuleName>,
-    tree: ConcreteSyntaxTreeBuilder<&'static str>,
+    tree: ConcreteSyntaxTreeBuilder<Arc<str>>,
 }
 
 #[derive(Debug)]
@@ -51,9 +51,9 @@ impl InterpreterState<'_> {
     /// Builds the concrete syntax tree for this rule, called recursively.
     fn parse_rule(&mut self, name: PegRuleName) {
         let start = self.parser.mark();
-        let end = self.parser.memo(name, start).unwrap().unwrap();
+        let end = self.parser.memo(name.clone(), start).unwrap().unwrap();
 
-        let report = self.scavenge_rule(name);
+        let report = self.scavenge_rule(name.clone());
 
         assert!(
             report.named_nodes.iter().all(|(_, s, e)| s <= e),
@@ -91,7 +91,10 @@ impl InterpreterState<'_> {
     /// Scaffolding for `scavenge_expression`.
     fn scavenge_rule(&mut self, rule: PegRuleName) -> ScavengeReport {
         assert!(
-            matches!(self.parser.memo(rule, self.parser.mark()), Some(Some(_))),
+            matches!(
+                self.parser.memo(rule.clone(), self.parser.mark()),
+                Some(Some(_))
+            ),
             "Tried to scavenge a rule that doesn't match: {rule:?} at {:?}",
             self.parser.mark()
         );
@@ -134,8 +137,8 @@ impl InterpreterState<'_> {
                 let start = self.parser.mark();
 
                 // It always matches.
-                let end = self.parser.memo(*name, start).unwrap().unwrap();
-                report.named_nodes.push((*name, start, end));
+                let end = self.parser.memo(name.clone(), start).unwrap().unwrap();
+                report.named_nodes.push((name.clone(), start, end));
 
                 self.parser.reset_to(end);
             }
@@ -225,7 +228,7 @@ impl InterpreterState<'_> {
                 let start = self.parser.mark();
 
                 // Look up the rule's memo and only test it if it doesn't pass.
-                match self.parser.memo(*name, start) {
+                match self.parser.memo(name.clone(), start) {
                     Some(Some(end)) => {
                         self.parser.reset_to(end);
                         true
@@ -235,15 +238,15 @@ impl InterpreterState<'_> {
                         panic!("Trying to match a rule that isn't memoized: {name} at {start:?}");
                     }
                     None => {
-                        let rule = self.grammar.rule(*name);
+                        let rule = self.grammar.rule(name.clone());
                         let matches = self.test_expression(rule.expr(), memo_only);
 
                         if matches {
                             let end = self.parser.mark();
-                            self.parser.memoize_match(*name, start, end);
+                            self.parser.memoize_match(name.clone(), start, end);
                             true
                         } else {
-                            self.parser.memoize_miss(*name, start);
+                            self.parser.memoize_miss(name.clone(), start);
                             false
                         }
                     }

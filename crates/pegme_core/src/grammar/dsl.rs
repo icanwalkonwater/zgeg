@@ -14,9 +14,9 @@ pub struct PegGrammarBuilder {
 
 impl PegGrammarBuilder {
     /// You probably want to use `rules()`.
-    pub fn rule<'a>(&'a mut self, name: &'static str) -> PegGrammarRuleBuilder<'a> {
-        let name = PegRuleName(name);
-        let prev = self.rules.insert(name, RefCell::new(vec![]));
+    pub fn rule<'a>(&'a mut self, name: &str) -> PegGrammarRuleBuilder<'a> {
+        let name = PegRuleName(name.into());
+        let prev = self.rules.insert(name.clone(), RefCell::new(vec![]));
         assert!(prev.is_none());
 
         PegGrammarRuleBuilder {
@@ -29,10 +29,10 @@ impl PegGrammarBuilder {
         &mut self,
         names: [&'static str; N],
     ) -> [PegGrammarRuleBuilder<'_>; N] {
-        let names = names.map(PegRuleName);
+        let names = names.map(|s| PegRuleName(s.into()));
 
-        for n in names {
-            let prev = self.rules.insert(n, RefCell::new(Vec::new()));
+        for n in &names {
+            let prev = self.rules.insert(n.clone(), RefCell::new(Vec::new()));
             assert!(prev.is_none());
         }
         names.map(|name| PegGrammarRuleBuilder {
@@ -125,7 +125,7 @@ pub trait CoercableToPegExpression {
 impl CoercableToPegExpression for &PegGrammarRuleBuilder<'_> {
     fn into_expr(self) -> PegExpressionBuilder {
         PegExpressionBuilder {
-            expr: PegExpression::Rule(self.name),
+            expr: PegExpression::Rule(self.name.clone()),
         }
     }
 }
@@ -159,7 +159,8 @@ impl CoercableToPegExpression for [char; 2] {
 /// Append anything that can be turned into an expression to the grammar rule.
 impl<T: CoercableToPegExpression> AddAssign<T> for PegGrammarRuleBuilder<'_> {
     fn add_assign(&mut self, rhs: T) {
-        self.builder.append_to_rule(self.name, rhs.into_expr().expr);
+        self.builder
+            .append_to_rule(self.name.clone(), rhs.into_expr().expr);
     }
 }
 
@@ -188,7 +189,7 @@ impl<R: CoercableToPegExpression> Add<R> for &PegGrammarRuleBuilder<'_> {
     type Output = PegExpressionBuilder;
     fn add(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::Rule(self.name), rhs.into_expr().expr),
+            expr: PegExpression::seq(PegExpression::Rule(self.name.clone()), rhs.into_expr().expr),
         }
     }
 }
@@ -196,7 +197,10 @@ impl<R: CoercableToPegExpression> BitOr<R> for &PegGrammarRuleBuilder<'_> {
     type Output = PegExpressionBuilder;
     fn bitor(self, rhs: R) -> Self::Output {
         PegExpressionBuilder {
-            expr: PegExpression::choice(PegExpression::Rule(self.name), rhs.into_expr().expr),
+            expr: PegExpression::choice(
+                PegExpression::Rule(self.name.clone()),
+                rhs.into_expr().expr,
+            ),
         }
     }
 }

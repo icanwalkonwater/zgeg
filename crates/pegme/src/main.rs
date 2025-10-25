@@ -14,7 +14,8 @@ fn main() {
 
     let file = std::env::args().nth(1).unwrap();
     let input = std::fs::read_to_string(file).unwrap();
-    let tree = pegme_meta::parse(input);
+    let cst = pegme_meta::parse(input);
+    let grammar = pegme_meta::cst_to_grammar(&cst);
 
-    println!("{tree}");
+    println!("{grammar}");
 }
