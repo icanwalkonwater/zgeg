@@ -220,14 +220,49 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 name = "pegme"
 version = "0.1.0"
 dependencies = [
+ "pegme_core",
+ "pegme_meta",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "pegme_codegen"
+version = "0.1.0"
+dependencies = [
+ "pegme_core",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "pegme_core"
+version = "0.1.0"
+dependencies = [
  "indexmap",
  "itertools",
  "pretty_assertions",
- "proc-macro2",
- "quote",
- "tracing",
- "tracing-subscriber",
  "unicode-id-start",
+]
+
+[[package]]
+name = "pegme_meta"
+version = "0.1.0"
+dependencies = [
+ "pegme_codegen",
+ "pegme_core",
+ "pegme_meta_grammar",
+ "pretty_assertions",
+ "tracing",
+]
+
+[[package]]
+name = "pegme_meta_grammar"
+version = "0.1.0"
+dependencies = [
+ "pegme_core",
 ]
 
 [[package]]
@@ -244,6 +279,16 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
+]
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn",
 ]
 
 [[package]]

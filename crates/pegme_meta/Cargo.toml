@@ -1,0 +1,16 @@
+[package]
+name = "pegme_meta"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pegme_core = { path = "../pegme_core" }
+# Needed by generated code
+tracing.workspace = true
+
+[build-dependencies]
+pegme_codegen = { path = "../pegme_codegen" }
+pegme_meta_grammar = { path = "../pegme_meta_grammar" }
+
+[dev-dependencies]
+pretty_assertions.workspace = true

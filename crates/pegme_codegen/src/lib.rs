@@ -1,4 +1,4 @@
-use crate::grammar::{PegExpression, PegGrammar, PegTerminal};
+use pegme_core::grammar::{PegExpression, PegGrammar, PegTerminal};
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -9,7 +9,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     let syntax_kind_variants = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("{}", name.0))
+        .map(|name| format_ident!("{}", name.as_str()))
         .collect::<Vec<_>>();
     let parser_ident = format_ident!("{name}Parser");
 
@@ -17,12 +17,12 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
     let parse_fn_idents = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("parse_{}", name.0))
+        .map(|name| format_ident!("parse_{}", name.as_str()))
         .collect::<Vec<_>>();
     let test_fn_idents = g
         .rule_names()
         .iter()
-        .map(|name| format_ident!("test_{}", name.0))
+        .map(|name| format_ident!("test_{}", name.as_str()))
         .collect::<Vec<_>>();
 
     // Generate entry point.
@@ -93,7 +93,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         .zip(parse_fn_idents)
         .zip(test_fn_idents)
     {
-        let rule = g.rule_by_name(rule_name.0);
+        let rule = g.rule_by_name(rule_name.as_str());
 
         let doc = format!("{rule}");
         let rule_kind = format_ident!("{rule_name}");
@@ -114,7 +114,7 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
             }
         });
 
-        let name = rule_name.0;
+        let name = rule_name.as_str();
 
         let test_body = codegen_test_peg_expression(
             rule.expr(),
@@ -148,12 +148,12 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         });
     }
 
-    quote! {
-        //! DO NOT EDIT.
-        //! This file is auto-generated.
+    let file: syn::File = syn::parse_quote! {
+        // DO NOT EDIT.
+        // This file is auto-generated.
 
         use std::sync::Arc;
-        use crate::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
+        use pegme_core::{packrat::PackratParser, cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder}};
 
         #entry_point
         #syntax_kind_enum
@@ -163,8 +163,8 @@ pub fn parser_for_grammar(g: &PegGrammar, name: String, rule: &str) -> String {
         impl #parser_ident {
             #parser_body
         }
-    }
-    .to_string()
+    };
+    prettyplease::unparse(&file)
 }
 
 fn codegen_parse_peg_expression(expr: &PegExpression) -> TokenStream {

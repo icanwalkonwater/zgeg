@@ -34,6 +34,12 @@ impl PegGrammar {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PegRuleName(pub(crate) &'static str);
 
+impl PegRuleName {
+    pub fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct PegRule {
     expr: PegExpression,

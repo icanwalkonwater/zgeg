@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
+use pegme_core::cst::ConcreteSyntaxTree;
+
 use crate::{
-    cst::ConcreteSyntaxTree,
-    meta::generated::{
-        parse_rule,
-        MetaPegmeKind::{self, *},
-    },
+    parse_rule,
+    MetaPegmeKind::{self, *},
 };
 
 fn cst_node<const N: usize>(

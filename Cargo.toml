@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/zgegc", "crates/pegme"]
+members = [
+  "crates/zgegc",
+  "crates/pegme",
+  "crates/pegme_core",
+  "crates/pegme_codegen",
+  "crates/pegme_meta",
+  "crates/pegme_meta_grammar",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +20,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 indexmap = "2.11"
 itertools = "0.14"
 unicode-id-start = "1.4"
+syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
+prettyplease = "0.2"
 pretty_assertions = "1.4"

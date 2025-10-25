@@ -1,0 +1,13 @@
+[package]
+name = "pegme_core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+itertools.workspace = true
+unicode-id-start.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+

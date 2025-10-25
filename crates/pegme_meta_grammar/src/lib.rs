@@ -1,8 +1,7 @@
-use crate::grammar::PegGrammar;
+use pegme_core::grammar::{dsl::*, PegGrammar};
 
 #[allow(non_snake_case)]
 pub fn make_meta_grammar() -> PegGrammar {
-    use crate::grammar::dsl::*;
     let mut g = PegGrammarBuilder::default();
     declare_rules! {
         g;

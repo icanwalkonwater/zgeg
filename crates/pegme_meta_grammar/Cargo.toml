@@ -1,10 +1,7 @@
 [package]
-name = "pegme"
+name = "pegme_meta_grammar"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 pegme_core = { path = "../pegme_core" }
-pegme_meta = { path = "../pegme_meta" }
-tracing.workspace = true
-tracing-subscriber.workspace = true

@@ -1,0 +1,11 @@
+[package]
+name = "pegme_codegen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pegme_core = { path = "../pegme_core" }
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
+prettyplease.workspace = true

@@ -1,0 +1,43 @@
+rule File = Rule* Trivia EOF;
+rule Rule = RuleKind IDENT EQUAL Expr SEMICOLON;
+rule RuleKind = RULE;
+
+rule Expr = ExprChoice;
+rule ExprChoice = ExprSeq (SLASH_F ExprSeq)*;
+rule ExprSeq = ExprPredicate+;
+rule ExprPredicate = (AMPERSAND / EXCLAMATION)? ExprRepeat;
+rule ExprRepeat = ExprAtom RepeatOp?;
+rule ExprAtom = PAREN_L Expr PAREN_R / IDENT / DOT / Keyword / CharacterRanges;
+
+rule RepeatOp = STAR / PLUS / QUESTION;
+rule Keyword = Trivia "\"" ("\\" . / !"\"" .)* "\"";
+
+rule CharacterRanges = Trivia "[" (CharacterRangesRange / CharacterRangesIdent)+ "]";
+rule CharacterRangesIdent = "\\" . / !"]" .;
+rule CharacterRangesRange = CharacterRangesIdent "-" CharacterRangesIdent;
+
+rule Whitespace = [ \t\n\r]+;
+rule Comment = "//" + (!EOL .)* EOL;
+rule Trivia = (Whitespace / Comment)*;
+rule EOL = "\n" / "\r\n" / "\r" / EOF;
+rule EOF = !.;
+rule EOKW = ![a-zA-Z0-9_];
+
+rule IDENT = Trivia !KW [a-zA-Z_] [a-zA-Z0-9_]*;
+rule KW = RULE;
+rule INTEGER = Trivia [0-9] ![a-zA-Z0-9_];
+
+rule RULE = Trivia "rule" EOKW;
+rule EQUAL = Trivia "=";
+rule SLASH_F = Trivia "/";
+rule AMPERSAND = Trivia "&";
+rule EXCLAMATION = Trivia "!";
+rule STAR = Trivia "*";
+rule PLUS = Trivia "+";
+rule QUESTION = Trivia "?";
+rule COLON = Trivia ",";
+rule SEMICOLON = Trivia ";";
+rule PAREN_L = Trivia "(";
+rule PAREN_R = Trivia ")";
+rule BRACES_L = Trivia "{";
+rule BRACES_R = Trivia "}";
