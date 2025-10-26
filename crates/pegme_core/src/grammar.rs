@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::ops::RangeInclusive;
 
-use indexmap::IndexMap;
+use itertools::Itertools;
 
 pub mod dsl;
 mod fmt;
@@ -10,263 +10,220 @@ mod visit;
 pub use simplify::*;
 pub use visit::*;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct PegGrammar {
-    rules: IndexMap<PegRuleName, PegRule>,
+#[derive(Debug, PartialEq, Default)]
+pub struct Grammar {
+    rules: Vec<GrammarRule>,
 }
 
-impl PegGrammar {
-    pub fn new(rules: IndexMap<PegRuleName, PegRule>) -> Result<Self, Box<dyn std::error::Error>> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrammarRule {
+    name: String,
+    config: RuleConfig,
+    match_expression: PegExpression,
+    recovery_expression: Option<PegExpression>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RuleConfig {
+    pub is_token: bool,
+    pub has_ast: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PegExpression {
+    Terminal(PegTerminal),
+    NonTerminal {
+        rule_name: String,
+    },
+    NamedNonTerminal {
+        name: String,
+        rule_name: String,
+    },
+    Seq {
+        left: Box<PegExpression>,
+        right: Box<PegExpression>,
+    },
+    Choice {
+        left: Box<PegExpression>,
+        right: Box<PegExpression>,
+    },
+    Repetition {
+        expr: Box<PegExpression>,
+    },
+    Predicate {
+        positive: bool,
+        expr: Box<PegExpression>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PegTerminal {
+    Any,
+    Epsilon,
+    Literal(String),
+    Ranges(Vec<RangeInclusive<char>>),
+}
+
+// === Methods
+
+impl Grammar {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_rules(rules: Vec<GrammarRule>) -> Result<Self, Box<dyn std::error::Error>> {
+        // Find duplicates.
+        let err = rules
+            .iter()
+            .dedup_by_with_count(|a, b| a.name == b.name)
+            .filter(|(count, _)| *count > 1)
+            .map(|(_, rule)| format!("Rule {} is defined multiple times !", rule.name))
+            .join("\n");
+        if !err.is_empty() {
+            return Err(err)?;
+        }
+
         Ok(Self { rules })
     }
 
-    pub fn rule_names(&self) -> Vec<PegRuleName> {
-        self.rules.keys().cloned().collect()
+    pub fn rules(&self) -> &[GrammarRule] {
+        &self.rules
     }
 
-    pub fn rule_by_name(&self, name: &str) -> &PegRule {
-        self.rule(PegRuleName(name.into()))
+    pub fn find_rule(&self, name: &str) -> Option<&GrammarRule> {
+        self.rules.iter().find(|r| r.name == name)
     }
 
-    pub fn rule(&self, name: PegRuleName) -> &PegRule {
-        &self.rules[&name]
+    pub fn find_rule_mut(&mut self, name: &str) -> Option<&mut GrammarRule> {
+        self.rules.iter_mut().find(|r| r.name == name)
+    }
+
+    pub fn append_rule(&mut self, rule: GrammarRule) -> Result<(), Box<dyn std::error::Error>> {
+        // Check already defined.
+        if self.rules.iter().any(|r| r.name == rule.name) {
+            return Err(format!("Rule {} already defined", rule.name))?;
+        }
+
+        self.rules.push(rule);
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PegRuleName(pub Arc<str>);
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct PegRule {
-    expr: PegExpression,
-}
-
-impl PegRule {
-    pub fn simple(expr: PegExpression) -> Self {
-        Self { expr }
-    }
-
-    pub fn multi(choices: impl IntoIterator<Item = PegExpression>) -> Self {
-        let mut choices = choices.into_iter();
-
-        if let Some(first) = choices.next() {
-            let expr = choices.fold(first, |acc, choice| PegExpression::choice(acc, choice));
-
-            Self::simple(expr)
-        } else {
-            Self::simple(PegExpression::not_predicate(PegExpression::Epsilon))
+impl GrammarRule {
+    pub fn new(name: impl Into<String>, expr: PegExpression) -> Self {
+        Self {
+            name: name.into(),
+            config: Default::default(),
+            match_expression: expr,
+            recovery_expression: None,
         }
     }
 
-    pub fn expr(&self) -> &PegExpression {
-        &self.expr
+    pub fn token(name: impl Into<String>, expr: PegExpression) -> Self {
+        Self {
+            name: name.into(),
+            config: RuleConfig {
+                is_token: true,
+                ..Default::default()
+            },
+            match_expression: expr,
+            recovery_expression: None,
+        }
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PegExpression {
-    Terminal(PegTerminal),
-    Rule(PegRuleName),
-    Named(Arc<str>, Box<PegExpression>),
-    Seq(Box<PegExpression>, Box<PegExpression>),
-    Choice(Box<PegExpression>, Box<PegExpression>),
-    Repetition {
-        expr: Box<PegExpression>,
-        min: u32,
-        max: Option<u32>,
-    },
-    Predicate {
-        expr: Box<PegExpression>,
-        positive: bool,
-    },
-    Anything,
-    Epsilon,
-}
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PegTerminal {
-    Exact(String),
-    CharacterRanges(Vec<(char, char)>),
-    PredefinedAscii,
-    PredefinedUtf8Whitespace,
-    PredefinedUtf8XidStart,
-    PredefinedUtf8XidContinue,
+    pub fn config(&self) -> &RuleConfig {
+        &self.config
+    }
+
+    pub fn match_expression(&self) -> &PegExpression {
+        &self.match_expression
+    }
+
+    pub fn recovery_expression(&self) -> Option<&PegExpression> {
+        self.recovery_expression.as_ref()
+    }
+
+    pub fn edit_config(&mut self, edit_fn: impl FnOnce(&mut RuleConfig)) {
+        edit_fn(&mut self.config);
+    }
+
+    pub fn with_recovery_expression(&mut self, recover: PegExpression) {
+        assert!(self.recovery_expression.is_none());
+        self.recovery_expression = Some(recover);
+    }
 }
 
 impl PegExpression {
-    pub fn exact(kw: impl Into<String>) -> Self {
-        Self::Terminal(PegTerminal::Exact(kw.into()))
-    }
-
-    pub fn range(from: char, to: char) -> Self {
-        Self::Terminal(PegTerminal::CharacterRanges(vec![(from, to)]))
-    }
-
-    pub fn ranges(ranges: Vec<(char, char)>) -> Self {
-        Self::Terminal(PegTerminal::CharacterRanges(ranges))
-    }
-
-    pub fn any_ascii() -> Self {
-        Self::Terminal(PegTerminal::PredefinedAscii)
-    }
-
-    pub fn any_utf8_whitespace() -> Self {
-        Self::Terminal(PegTerminal::PredefinedUtf8Whitespace)
-    }
-
-    pub fn any_utf8_xid_start() -> Self {
-        Self::Terminal(PegTerminal::PredefinedUtf8XidStart)
-    }
-
-    pub fn any_utf8_xid_continue() -> Self {
-        Self::Terminal(PegTerminal::PredefinedUtf8XidContinue)
-    }
-
-    pub fn rule(name: &str) -> Self {
-        Self::Rule(PegRuleName(name.into()))
-    }
-
-    pub fn named(name: &str, expr: impl Into<Box<PegExpression>>) -> Self {
-        Self::Named(name.into(), expr.into())
-    }
-
-    pub fn seq(left: impl Into<Box<PegExpression>>, right: impl Into<Box<PegExpression>>) -> Self {
-        Self::Seq(left.into(), right.into())
-    }
-
-    pub fn choice(
-        left: impl Into<Box<PegExpression>>,
-        right: impl Into<Box<PegExpression>>,
-    ) -> Self {
-        Self::Choice(left.into(), right.into())
-    }
-
-    pub fn zero_or_more(expr: PegExpression) -> Self {
-        Self::Repetition {
-            expr: Box::new(expr),
-            min: 0,
-            max: None,
-        }
-    }
-
-    pub fn one_or_more(expr: PegExpression) -> Self {
-        Self::Repetition {
-            expr: Box::new(expr),
-            min: 1,
-            max: None,
-        }
-    }
-
-    pub fn optional(expr: PegExpression) -> Self {
-        Self::Repetition {
-            expr: Box::new(expr),
-            min: 0,
-            max: Some(1),
-        }
-    }
-
-    pub fn repetition(expr: PegExpression, min: u32, max: Option<u32>) -> Self {
-        Self::Repetition {
-            expr: Box::new(expr),
-            min,
-            max,
-        }
-    }
-
-    pub fn and_predicate(pred: impl Into<Box<PegExpression>>) -> Self {
-        Self::predicate(pred, true)
-    }
-
-    pub fn not_predicate(pred: impl Into<Box<PegExpression>>) -> Self {
-        Self::predicate(pred, false)
-    }
-
-    pub fn predicate(pred: impl Into<Box<PegExpression>>, positive: bool) -> Self {
-        Self::Predicate {
-            expr: pred.into(),
-            positive,
-        }
-    }
-
-    pub fn anything() -> Self {
-        Self::Anything
+    pub fn any() -> Self {
+        Self::Terminal(PegTerminal::Any)
     }
 
     pub fn epsilon() -> Self {
-        Self::Epsilon
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::grammar::PegRuleName;
-
-    use super::{PegExpression, PegGrammar, PegRule};
-
-    fn make_simple_adder_ref() -> PegGrammar {
-        PegGrammar::new(
-            [
-                ("root", PegRule::simple(PegExpression::rule("sum"))),
-                (
-                    "sum",
-                    PegRule::simple(PegExpression::seq(
-                        PegExpression::rule("value"),
-                        PegExpression::zero_or_more(PegExpression::seq(
-                            PegExpression::exact("+"),
-                            PegExpression::rule("value"),
-                        )),
-                    )),
-                ),
-                (
-                    "value",
-                    PegRule::multi([
-                        PegExpression::one_or_more(PegExpression::range('0', '9')),
-                        PegExpression::seq(
-                            PegExpression::seq(
-                                PegExpression::exact("("),
-                                PegExpression::rule("sum"),
-                            ),
-                            PegExpression::exact(")"),
-                        ),
-                    ]),
-                ),
-            ]
-            .into_iter()
-            .map(|(n, r)| (PegRuleName(n.into()), r))
-            .collect(),
-        )
-        .unwrap()
+        Self::Terminal(PegTerminal::Epsilon)
     }
 
-    #[test]
-    fn simple_adder_fmt() {
-        let expected = r#"
-root: sum
-
-sum: value ("+" value)*
-
-value: ([0-9]+ / "(" sum ")")
-"#;
-
-        let grammar = make_simple_adder_ref();
-
-        pretty_assertions::assert_str_eq!(expected.trim(), grammar.to_string().trim());
+    pub fn literal(lit: &str) -> Self {
+        Self::Terminal(PegTerminal::Literal(lit.into()))
     }
 
-    #[test]
-    fn simple_adder_dsl() {
-        use super::dsl::*;
+    pub fn ranges(ranges: impl Iterator<Item = RangeInclusive<char>>) -> Self {
+        Self::Terminal(PegTerminal::Ranges(ranges.collect()))
+    }
 
-        let mut grammar = PegGrammarBuilder::default();
-        declare_rules!(grammar; root, sum, value);
+    pub fn rule(rule: &str) -> Self {
+        Self::NonTerminal {
+            rule_name: rule.into(),
+        }
+    }
 
-        root += &sum;
-        sum += eps() + &value + (eps() + "+" + &value).star();
-        value += (eps() + ['0', '9']).plus();
-        value += eps() + "(" + &sum + ")";
+    pub fn named_rule(name: &str, rule: &str) -> Self {
+        Self::NamedNonTerminal {
+            name: name.into(),
+            rule_name: rule.into(),
+        }
+    }
+    pub fn seq(self, next: Self) -> Self {
+        Self::Seq {
+            left: Box::new(self),
+            right: Box::new(next),
+        }
+    }
 
-        let grammar = grammar.build();
+    pub fn or(self, alt: Self) -> Self {
+        Self::Choice {
+            left: Box::new(self),
+            right: Box::new(alt),
+        }
+    }
 
-        pretty_assertions::assert_eq!(make_simple_adder_ref(), grammar);
+    pub fn star(self) -> Self {
+        Self::Repetition {
+            expr: Box::new(self),
+        }
+    }
+
+    pub fn opt(self) -> Self {
+        Self::Choice {
+            left: Box::new(self),
+            right: Box::new(Self::epsilon()),
+        }
+    }
+
+    pub fn plus(self) -> Self {
+        Self::Seq {
+            left: Box::new(self.clone()),
+            right: Box::new(Self::star(self)),
+        }
+    }
+
+    pub fn lookahead(self, positive: bool) -> Self {
+        Self::Predicate {
+            positive,
+            expr: Box::new(self),
+        }
     }
 }

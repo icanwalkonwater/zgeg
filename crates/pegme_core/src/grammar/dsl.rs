@@ -1,337 +1,183 @@
-use indexmap::IndexMap;
-use std::{
-    cell::RefCell,
-    ops::{Add, AddAssign, BitOr},
-};
+use super::*;
+use std::ops::{BitOr, RangeInclusive, Sub};
 
-use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
-use crate::grammar::{visit::PegExpressionVisitorMut, PegExpressionSimplifier, PegTerminal};
+// Helper functions available inside the macro.
 
-#[derive(Default)]
-pub struct PegGrammarBuilder {
-    rules: IndexMap<PegRuleName, RefCell<Vec<PegExpression>>>,
+pub fn _any() -> PegExpression {
+    PegExpression::any()
 }
 
-impl PegGrammarBuilder {
-    /// You probably want to use `rules()`.
-    pub fn rule<'a>(&'a mut self, name: &str) -> PegGrammarRuleBuilder<'a> {
-        let name = PegRuleName(name.into());
-        let prev = self.rules.insert(name.clone(), RefCell::new(vec![]));
-        assert!(prev.is_none());
+pub fn _eps() -> PegExpression {
+    PegExpression::epsilon()
+}
 
-        PegGrammarRuleBuilder {
-            builder: self,
-            name,
-        }
-    }
+pub fn _ranges(ranges: Vec<RangeInclusive<char>>) -> PegExpression {
+    PegExpression::ranges(ranges.into_iter())
+}
 
-    pub fn rules<const N: usize>(
-        &mut self,
-        names: [&'static str; N],
-    ) -> [PegGrammarRuleBuilder<'_>; N] {
-        let names = names.map(|s| PegRuleName(s.into()));
+pub fn _named(name: &str, rule: RuleRef) -> PegExpression {
+    PegExpression::named_rule(name, rule.0)
+}
 
-        for n in &names {
-            let prev = self.rules.insert(n.clone(), RefCell::new(Vec::new()));
-            assert!(prev.is_none());
-        }
-        names.map(|name| PegGrammarRuleBuilder {
-            builder: &*self,
-            name,
-        })
-    }
+pub fn _star(expr: impl AsPegExpr) -> PegExpression {
+    expr.cast().star()
+}
 
-    fn append_to_rule(&self, name: PegRuleName, expr: PegExpression) {
-        self.rules[&name].borrow_mut().push(expr);
-    }
+pub fn _opt(expr: impl AsPegExpr) -> PegExpression {
+    expr.cast().opt()
+}
 
-    pub fn build(self) -> PegGrammar {
-        let rules = self
-            .rules
-            .into_iter()
-            .map(|(name, exprs)| {
-                let mut rule = PegRule::multi(exprs.into_inner());
+pub fn _plus(expr: impl AsPegExpr) -> PegExpression {
+    expr.cast().plus()
+}
 
-                // Simplify rule.
-                PegExpressionSimplifier.visit_expr_mut(&mut rule.expr);
+pub fn _not(expr: impl AsPegExpr) -> PegExpression {
+    expr.cast().lookahead(false)
+}
 
-                (name, rule)
-            })
-            .collect();
+/// Helper trait marking what can be used as an expression.
+pub trait AsPegExpr {
+    fn cast(&self) -> PegExpression;
+}
 
-        PegGrammar::new(rules).unwrap()
+/// Reflexive impl.
+impl AsPegExpr for PegExpression {
+    fn cast(&self) -> PegExpression {
+        self.clone()
     }
 }
 
-/// Helper macro prepares multiples rules on a builder.
-///
-/// # Example
-/// ```rust
-/// # use pegme_core::grammar::dsl::*;
-/// let mut g = PegGrammarBuilder::default();
-/// declare_rules!(g; root, sum, value);
-///
-/// root += &sum;
-/// value += eps() + ['0', '9'];
-/// // ...
-/// ```
-#[macro_export]
-macro_rules! declare_rules {
-    ($grammar:expr; $($rule:ident),+ $(,)?) => {
-        let [$(mut $rule),+] = $grammar.rules([$(stringify!($rule)),+]);
-    };
-}
-pub use declare_rules;
-
-pub struct PegGrammarRuleBuilder<'a> {
-    builder: &'a PegGrammarBuilder,
-    name: PegRuleName,
-}
-
-pub struct PegExpressionBuilder {
-    expr: PegExpression,
-}
-
-impl PegExpressionBuilder {
-    pub fn star(self) -> Self {
-        star(self)
-    }
-
-    pub fn plus(self) -> Self {
-        plus(self)
-    }
-
-    pub fn opt(self) -> Self {
-        opt(self)
+/// Strings are literals.
+impl AsPegExpr for &'static str {
+    fn cast(&self) -> PegExpression {
+        PegExpression::literal(self)
     }
 }
 
-// == DSL operators
-//
-// Those types can be converted to expressions:
-// - `&'static str` as exact.
-// - `&PegGrammarRuleBuilder` as rule.
-// - `[char, char]` as range.
-//
-// Operators:
-// - `+=` to add an alternative to a rule.
-// - `+` for sequence.
-// - `|` for choice.
-
-pub trait CoercableToPegExpression {
-    fn into_expr(self) -> PegExpressionBuilder;
-}
-
-impl CoercableToPegExpression for &PegGrammarRuleBuilder<'_> {
-    fn into_expr(self) -> PegExpressionBuilder {
-        PegExpressionBuilder {
-            expr: PegExpression::Rule(self.name.clone()),
-        }
+/// The empty tuple is epsilon.
+impl AsPegExpr for () {
+    fn cast(&self) -> PegExpression {
+        PegExpression::epsilon()
     }
 }
-impl CoercableToPegExpression for PegExpressionBuilder {
-    fn into_expr(self) -> PegExpressionBuilder {
+
+/// Operation overloads:
+/// - Sub becomes Seq.
+/// - BitOr becomes Choice.
+
+impl<T: AsPegExpr> Sub<T> for PegExpression {
+    type Output = Self;
+    fn sub(self, rhs: T) -> Self::Output {
+        self.seq(rhs.cast())
+    }
+}
+
+impl<T: AsPegExpr> BitOr<T> for PegExpression {
+    type Output = Self;
+    fn bitor(self, rhs: T) -> Self::Output {
+        self.or(rhs.cast())
+    }
+}
+
+impl Sub<PegExpression> for &'static str {
+    type Output = PegExpression;
+    fn sub(self, rhs: PegExpression) -> Self::Output {
+        self.cast().seq(rhs)
+    }
+}
+impl Sub<RuleRef> for &'static str {
+    type Output = PegExpression;
+    fn sub(self, rhs: RuleRef) -> Self::Output {
+        self.cast().seq(rhs.cast())
+    }
+}
+
+impl BitOr<PegExpression> for &'static str {
+    type Output = PegExpression;
+    fn bitor(self, rhs: PegExpression) -> Self::Output {
+        self.cast().or(rhs)
+    }
+}
+impl BitOr<RuleRef> for &'static str {
+    type Output = PegExpression;
+    fn bitor(self, rhs: RuleRef) -> Self::Output {
+        self.cast().or(rhs.cast())
+    }
+}
+
+/// Handy trivially copyable wrapper to have some type checking in the macro.
+#[derive(Clone, Copy)]
+pub struct RuleRef(pub &'static str);
+
+impl AsPegExpr for RuleRef {
+    fn cast(&self) -> PegExpression {
+        PegExpression::rule(self.0)
+    }
+}
+
+impl<T: AsPegExpr> Sub<T> for RuleRef {
+    type Output = PegExpression;
+    fn sub(self, rhs: T) -> Self::Output {
+        self.cast().seq(rhs.cast())
+    }
+}
+
+impl<T: AsPegExpr> BitOr<T> for RuleRef {
+    type Output = PegExpression;
+    fn bitor(self, rhs: T) -> Self::Output {
+        self.cast().or(rhs.cast())
+    }
+}
+
+/// Useful extension to mark a rule as a token after the fact.
+impl GrammarRule {
+    pub fn with_token(mut self, is_token: bool) -> GrammarRule {
+        self.config.is_token = is_token;
         self
     }
 }
-impl CoercableToPegExpression for PegTerminal {
-    fn into_expr(self) -> PegExpressionBuilder {
-        PegExpressionBuilder {
-            expr: PegExpression::Terminal(self),
-        }
-    }
-}
-impl CoercableToPegExpression for &'static str {
-    fn into_expr(self) -> PegExpressionBuilder {
-        PegExpressionBuilder {
-            expr: PegExpression::exact(self),
-        }
-    }
-}
-impl CoercableToPegExpression for [char; 2] {
-    fn into_expr(self) -> PegExpressionBuilder {
-        PegExpressionBuilder {
-            expr: PegExpression::range(self[0], self[1]),
-        }
-    }
-}
 
-/// Append anything that can be turned into an expression to the grammar rule.
-impl<T: CoercableToPegExpression> AddAssign<T> for PegGrammarRuleBuilder<'_> {
-    fn add_assign(&mut self, rhs: T) {
-        self.builder
-            .append_to_rule(self.name.clone(), rhs.into_expr().expr);
-    }
-}
+/// Macro to simplify the declaration of a new pegme grammar.
+///
+/// # Example
+/// ```
+/// # use pegme_core::grammar::dsl::*;
+/// let g = grammar! {
+///   let expr = num - "+" - num;
+///   #[token]
+///   let num = _plus(_ranges(vec!['0'..='9']));
+/// }
+/// .unwrap();
+/// ```
+#[macro_export]
+macro_rules! grammar {
+    ($(
+        $(#[$attr:ident])*
+        let $name:ident = $expr:expr;
+    )*) => {{
+        use $crate::grammar::dsl::*;
+        // Predeclare rule refs.
+        $(
+            #[allow(unused, non_snake_case)]
+            let $name = $crate::grammar::dsl::RuleRef(stringify!($name));
+        )*
 
-// Operators for expression builder.
+        // Build rules.
+        let rules = vec![
+            $(
+                $crate::grammar::GrammarRule::new(
+                    stringify!($name),
+                    // Use epsilon here to nudge the type system in the right direction.
+                    $crate::grammar::dsl::_eps() - $expr,
+                ).with_token($crate::grammar::dsl::grammar!(@is-token $($attr)*)),
+            )*
+        ];
 
-impl<R: CoercableToPegExpression> Add<R> for PegExpressionBuilder {
-    type Output = PegExpressionBuilder;
-    fn add(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::seq(self.expr, rhs.into_expr().expr),
-        }
-    }
-}
-impl<R: CoercableToPegExpression> BitOr<R> for PegExpressionBuilder {
-    type Output = PegExpressionBuilder;
-    fn bitor(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::choice(self.expr, rhs.into_expr().expr),
-        }
-    }
+        // Build grammar.
+        $crate::grammar::Grammar::from_rules(rules)
+    }};
+    (@is-token token) => { true };
+    (@is-token) => { false };
 }
 
-// Operators for rule builder.
-
-impl<R: CoercableToPegExpression> Add<R> for &PegGrammarRuleBuilder<'_> {
-    type Output = PegExpressionBuilder;
-    fn add(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::Rule(self.name.clone()), rhs.into_expr().expr),
-        }
-    }
-}
-impl<R: CoercableToPegExpression> BitOr<R> for &PegGrammarRuleBuilder<'_> {
-    type Output = PegExpressionBuilder;
-    fn bitor(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::choice(
-                PegExpression::Rule(self.name.clone()),
-                rhs.into_expr().expr,
-            ),
-        }
-    }
-}
-
-// Operators for character class.
-
-impl<R: CoercableToPegExpression> Add<R> for PegTerminal {
-    type Output = PegExpressionBuilder;
-    fn add(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::seq(PegExpression::Terminal(self), rhs.into_expr().expr),
-        }
-    }
-}
-impl<R: CoercableToPegExpression> BitOr<R> for PegTerminal {
-    type Output = PegExpressionBuilder;
-    fn bitor(self, rhs: R) -> Self::Output {
-        PegExpressionBuilder {
-            expr: PegExpression::choice(PegExpression::Terminal(self), rhs.into_expr().expr),
-        }
-    }
-}
-
-// Helper to impl many operators on external types
-macro_rules! impl_binop_for_external {
-    (impl $op_ty:ident<$rhs:ty> for $lhs:ty, $op_fn:ident, $expr_new:ident) => {
-        impl $op_ty<$rhs> for $lhs {
-            type Output = PegExpressionBuilder;
-            fn $op_fn(self, rhs: $rhs) -> Self::Output {
-                PegExpressionBuilder {
-                    expr: PegExpression::$expr_new(self.into_expr().expr, rhs.into_expr().expr),
-                }
-            }
-        }
-    };
-}
-
-// Operators for &'static str.
-impl_binop_for_external!(impl Add<PegExpressionBuilder> for &'static str, add, seq);
-impl_binop_for_external!(impl Add<&PegGrammarRuleBuilder<'_>> for &'static str, add, seq);
-impl_binop_for_external!(impl BitOr<PegExpressionBuilder> for &'static str, bitor, choice);
-impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for &'static str, bitor, choice);
-
-// Operators for [char; 2].
-impl_binop_for_external!(impl Add<PegExpressionBuilder> for [char; 2], add, seq);
-impl_binop_for_external!(impl Add<&PegGrammarRuleBuilder<'_>> for [char; 2], add, seq);
-impl_binop_for_external!(impl BitOr<PegExpressionBuilder> for [char; 2], bitor, choice);
-impl_binop_for_external!(impl BitOr<&PegGrammarRuleBuilder<'_>> for [char; 2], bitor, choice);
-
-// Helpers for common expressions.
-
-// Expose character classes
-pub use PegTerminal::{
-    PredefinedAscii as Ascii, PredefinedUtf8Whitespace as Utf8Whitespace,
-    PredefinedUtf8XidContinue as Utf8XidContinue, PredefinedUtf8XidStart as Utf8XidStart,
-};
-
-/// Matches nothing without consuming.
-pub fn eps() -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::Epsilon,
-    }
-}
-
-/// Matches anything.
-pub fn any() -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::Anything,
-    }
-}
-
-pub fn named(name: &'static str, expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::named(name, expr.into_expr().expr),
-    }
-}
-
-pub fn star(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::zero_or_more(expr.into_expr().expr),
-    }
-}
-
-pub fn plus(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::one_or_more(expr.into_expr().expr),
-    }
-}
-
-pub fn opt(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::optional(expr.into_expr().expr),
-    }
-}
-
-pub fn and(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::and_predicate(expr.into_expr().expr),
-    }
-}
-
-pub fn not(expr: impl CoercableToPegExpression) -> PegExpressionBuilder {
-    PegExpressionBuilder {
-        expr: PegExpression::not_predicate(expr.into_expr().expr),
-    }
-}
-
-pub fn class(class: &'static str) -> PegExpressionBuilder {
-    let mut iter = class.chars().peekable();
-    let mut classes = Vec::new();
-
-    // Small parser for character ranges.
-    // `[a-z01]` expands to `vec![(a, z), (0, 0), (1, 1)]`.
-    loop {
-        let Some(c) = iter.next() else {
-            break;
-        };
-        assert_ne!(c, '-');
-
-        if let Some('-') = iter.peek() {
-            // Its a range
-            iter.next().unwrap();
-            let end = iter.next().unwrap();
-            classes.push((c, end));
-        } else {
-            // Its not a range
-            classes.push((c, c));
-        }
-    }
-
-    PegExpressionBuilder {
-        expr: PegExpression::ranges(classes),
-    }
-}
+pub use grammar;

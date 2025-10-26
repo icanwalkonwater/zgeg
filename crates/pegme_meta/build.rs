@@ -8,7 +8,7 @@ fn main() {
     let code = pegme_codegen::parser_for_grammar(
         &meta_grammar,
         "MetaPegme".into(),
-        "File",
+        "file",
         Default::default(),
     );
 

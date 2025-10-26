@@ -4,12 +4,12 @@ use itertools::Itertools;
 
 use crate::{
     cst::{ConcreteSyntaxTree, ConcreteSyntaxTreeBuilder},
-    grammar::{PegExpression, PegGrammar, PegRuleName, PegTerminal},
+    grammar::{Grammar, PegExpression, PegTerminal},
     packrat::{PackratMark, PackratParser},
 };
 
 pub fn parse_with_grammar(
-    g: &PegGrammar,
+    g: &Grammar,
     root: &'static str,
     input: String,
 ) -> Option<Arc<ConcreteSyntaxTree<Arc<str>>>> {
@@ -20,7 +20,12 @@ pub fn parse_with_grammar(
     };
 
     // This also initializes the packrat memos.
-    let matches = state.test_expression(&PegExpression::Rule(PegRuleName(root.into())), false);
+    let matches = state.test_expression(
+        &PegExpression::NonTerminal {
+            rule_name: root.into(),
+        },
+        false,
+    );
 
     if !matches {
         println!("No match");
@@ -29,27 +34,27 @@ pub fn parse_with_grammar(
 
     // Build the CST.
     state.parser.reset();
-    state.parse_rule(PegRuleName(root.into()));
+    state.parse_rule(root.into());
 
     Some(state.tree.build())
 }
 
 struct InterpreterState<'g> {
-    grammar: &'g PegGrammar,
-    parser: PackratParser<PegRuleName>,
+    grammar: &'g Grammar,
+    parser: PackratParser<String>,
     tree: ConcreteSyntaxTreeBuilder<Arc<str>>,
 }
 
 #[derive(Debug)]
 struct ScavengeReport {
-    named_nodes: Vec<(PegRuleName, PackratMark, PackratMark)>,
+    named_nodes: Vec<(String, PackratMark, PackratMark)>,
 }
 
 impl InterpreterState<'_> {
     /// This should only be called on rules that we know match.
     ///
     /// Builds the concrete syntax tree for this rule, called recursively.
-    fn parse_rule(&mut self, name: PegRuleName) {
+    fn parse_rule(&mut self, name: String) {
         let start = self.parser.mark();
         let end = self.parser.memo(name.clone(), start).unwrap().unwrap();
 
@@ -68,7 +73,7 @@ impl InterpreterState<'_> {
 
         self.parser.reset_to(start);
 
-        let node_ticket = self.tree.start_node(name.0);
+        let node_ticket = self.tree.start_node(name.into());
 
         for (rule, start, end) in report.named_nodes {
             // Eat leading tokens
@@ -89,7 +94,7 @@ impl InterpreterState<'_> {
     /// This should only be called on rules that we know match.
     ///
     /// Scaffolding for `scavenge_expression`.
-    fn scavenge_rule(&mut self, rule: PegRuleName) -> ScavengeReport {
+    fn scavenge_rule(&mut self, rule: String) -> ScavengeReport {
         assert!(
             matches!(
                 self.parser.memo(rule.clone(), self.parser.mark()),
@@ -103,8 +108,8 @@ impl InterpreterState<'_> {
             named_nodes: Default::default(),
         };
 
-        let rule = self.grammar.rule(rule);
-        self.scavenge_expression(rule.expr(), &mut report);
+        let rule = self.grammar.find_rule(&rule).unwrap();
+        self.scavenge_expression(rule.match_expression(), &mut report);
 
         report
     }
@@ -133,74 +138,51 @@ impl InterpreterState<'_> {
                 assert!(res);
             }
             // This is the main thing we are looking for.
-            Rule(name) => {
+            // TODO: handle named expressions.
+            NonTerminal { rule_name } | NamedNonTerminal { rule_name, .. } => {
                 let start = self.parser.mark();
 
                 // It always matches.
-                let end = self.parser.memo(name.clone(), start).unwrap().unwrap();
-                report.named_nodes.push((name.clone(), start, end));
+                let end = self.parser.memo(rule_name.clone(), start).unwrap().unwrap();
+                report.named_nodes.push((rule_name.clone(), start, end));
 
                 self.parser.reset_to(end);
             }
-            Named(_, expr) => {
-                // TODO: handle named expressions.
-                self.scavenge_expression(expr, report)
+            Seq { left, right } => {
+                self.scavenge_expression(left, report);
+                self.scavenge_expression(right, report);
             }
-            Seq(l, r) => {
-                self.scavenge_expression(l, report);
-                self.scavenge_expression(r, report);
-            }
-            Choice(l, r) => {
+            Choice { left, right } => {
                 // We don't know if the first half matches so we need to do a bit of gymnastic to
                 // figure it out.
 
                 let start = self.parser.mark();
-                if self.test_expression(l, true) {
+                if self.test_expression(left, true) {
                     // It's the first choice.
                     self.parser.reset_to(start);
 
-                    self.scavenge_expression(l, report);
+                    self.scavenge_expression(left, report);
                 } else {
                     // It's the second choice.
                     // No rollback since the test didn't pass and didn't consume.
-                    self.scavenge_expression(r, report);
+                    self.scavenge_expression(right, report);
                 }
             }
-            Repetition { expr, min, max } => {
-                // This one is tricky, we don't know how many are supposed to match.
-                // So we basically do it all over again.
+            Repetition { expr } => {
+                // Match as much as possible.
 
-                let max = max.unwrap_or(u32::MAX);
-                let mut matches = 0;
-
-                // Fast track the `min` first.
-                while matches < *min {
-                    self.scavenge_expression(expr, report);
-                    matches += 1;
-                }
-
-                while matches < max {
+                loop {
                     let start = self.parser.mark();
                     if self.test_expression(expr, true) {
                         self.parser.reset_to(start);
                         self.scavenge_expression(expr, report);
-                        matches += 1;
                     } else {
                         break;
                     }
                 }
-
-                assert!(*min <= matches && matches <= max);
             }
             Predicate { .. } => {
                 // This is just a noop, we know it matches and there is nothing to scavenge.
-            }
-            Anything => {
-                let res = self.parser.anything();
-                assert!(res.is_some());
-            }
-            Epsilon => {
-                // Literally nothing.
             }
         }
     }
@@ -209,60 +191,52 @@ impl InterpreterState<'_> {
     fn test_expression(&mut self, expr: &PegExpression, memo_only: bool) -> bool {
         use PegExpression::*;
         match expr {
-            Terminal(PegTerminal::Exact(lit)) => self.parser.expect(lit),
-            Terminal(PegTerminal::CharacterRanges(ranges)) => self
+            Terminal(PegTerminal::Epsilon) => true,
+            Terminal(PegTerminal::Any) => self.parser.anything().is_some(),
+            Terminal(PegTerminal::Literal(lit)) => self.parser.expect(lit),
+            Terminal(PegTerminal::Ranges(ranges)) => self
                 .parser
-                .eat(|c| ranges.iter().any(|&(from, to)| from <= c && c <= to))
+                .eat(|c| ranges.iter().any(|range| range.contains(&c)))
                 .is_some(),
-            Terminal(PegTerminal::PredefinedAscii) => self.parser.eat(|c| c.is_ascii()).is_some(),
-            Terminal(PegTerminal::PredefinedUtf8Whitespace) => {
-                self.parser.eat(char::is_whitespace).is_some()
-            }
-            Terminal(PegTerminal::PredefinedUtf8XidStart) => {
-                self.parser.eat(unicode_id_start::is_id_start).is_some()
-            }
-            Terminal(PegTerminal::PredefinedUtf8XidContinue) => {
-                self.parser.eat(unicode_id_start::is_id_continue).is_some()
-            }
-            Rule(name) => {
+            NonTerminal { rule_name } | NamedNonTerminal { rule_name, .. } => {
+                // NOTE: Named expression don't do shit here.
+
                 let start = self.parser.mark();
 
                 // Look up the rule's memo and only test it if it doesn't pass.
-                match self.parser.memo(name.clone(), start) {
+                match self.parser.memo(rule_name.clone(), start) {
                     Some(Some(end)) => {
                         self.parser.reset_to(end);
                         true
                     }
                     Some(None) => false,
                     None if memo_only => {
-                        panic!("Trying to match a rule that isn't memoized: {name} at {start:?}");
+                        panic!(
+                            "Trying to match a rule that isn't memoized: rule_name at {start:?}"
+                        );
                     }
                     None => {
-                        let rule = self.grammar.rule(name.clone());
-                        let matches = self.test_expression(rule.expr(), memo_only);
+                        let rule = self.grammar.find_rule(rule_name).unwrap();
+                        let matches = self.test_expression(rule.match_expression(), memo_only);
 
                         if matches {
                             let end = self.parser.mark();
-                            self.parser.memoize_match(name.clone(), start, end);
+                            self.parser.memoize_match(rule_name.clone(), start, end);
                             true
                         } else {
-                            self.parser.memoize_miss(name.clone(), start);
+                            self.parser.memoize_miss(rule_name.clone(), start);
                             false
                         }
                     }
                 }
             }
-            Named(_, expr) => {
-                // Named expression don't do shit here.
-                self.test_expression(expr, memo_only)
-            }
-            Seq(first, second) => {
+            Seq { left, right } => {
                 let start = self.parser.mark();
 
                 // Match the first, then the second.
                 // If the second doesn't match, we need to manually rollback.
-                match self.test_expression(first, memo_only) {
-                    true => match self.test_expression(second, memo_only) {
+                match self.test_expression(left, memo_only) {
+                    true => match self.test_expression(right, memo_only) {
                         true => true,
                         false => {
                             self.parser.reset_to(start);
@@ -272,32 +246,16 @@ impl InterpreterState<'_> {
                     false => false,
                 }
             }
-            Choice(left, right) => {
+            Choice { left, right } => {
                 // Rely on short circuiting to test the second part only if the first one doesn't
                 // match.
                 // No manual rollback needed here.
                 self.test_expression(left, memo_only) || self.test_expression(right, memo_only)
             }
-            Repetition { expr, min, max } => {
-                let start = self.parser.mark();
-
-                let max = max.unwrap_or(u32::MAX);
-                let mut matches = 0;
-
+            Repetition { expr } => {
                 // Greedily match as much as possible.
-                while matches < max {
-                    match self.test_expression(expr, memo_only) {
-                        true => matches += 1,
-                        false => break,
-                    }
-                }
-
-                if *min <= matches && matches <= max {
-                    true
-                } else {
-                    self.parser.reset_to(start);
-                    false
-                }
+                while self.test_expression(expr, memo_only) {}
+                true
             }
             Predicate { expr, positive } => {
                 let start = self.parser.mark();
@@ -309,8 +267,6 @@ impl InterpreterState<'_> {
 
                 matches == *positive
             }
-            Anything => self.parser.anything().is_some(),
-            Epsilon => true,
         }
     }
 }

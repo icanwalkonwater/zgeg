@@ -1,51 +1,51 @@
-rule File = Item* Trivia EOF;
-rule Item = ItemFunction;
-rule ItemFunction = FUN IDENT PAREN_L PAREN_R Block;
+rule file = item* trivia EOF;
+rule item = item_function;
+rule item_function = FUN IDENT PAREN_L PAREN_R block;
 
-rule Block = BRACES_L Statement* BRACES_R;
-rule Statement = Expr SEMICOLON;
+rule block = BRACES_L statement* BRACES_R;
+rule statement = expr SEMICOLON;
 
-rule Expr = ExprOpPrefix? ExprAtom ExprOpPostfix? (ExprOpInfix Expr)?;
-rule ExprAtom = PAREN_L Expr PAREN_R / Number / String / FunctionCall / IDENT;
-rule ExprOpInfix = PLUS / HYPHEN / STAR / SLASH_F;
-rule ExprOpPrefix = PLUS / HYPHEN;
-rule ExprOpPostfix = QUESTION_MARK;
+rule expr = expr_op_prefix? expr_atom expr_op_postfix? (expr_op_infix expr)?;
+rule expr_atom = PAREN_L expr PAREN_R / number / string / function_call / IDENT;
+rule expr_op_infix = PLUS / HYPHEN / STAR / SLASH_F;
+rule expr_op_prefix = PLUS / HYPHEN;
+rule expr_op_postfix = QUESTION_MARK;
 
-rule FunctionCall = IDENT PAREN_L (Expr COMMA)* (Expr COMMA?)? PAREN_R;
+rule function_call = IDENT PAREN_L (expr COMMA)* (expr COMMA?)? PAREN_R;
 
-rule IDENT = Trivia !KW [a-zA-Z_] [a-zA-Z0-9_]*;
+token IDENT = trivia !kw [a-zA-Z_] [a-zA-Z0-9_]*;
 
-rule Number = INTEGER / FLOATING;
-rule INTEGER = Trivia [0-9]+ ![a-zA-Z0-9];
-rule FLOATING = Trivia [0-9]+ "." [0-9]* [fF] ![a-zA-Z0-9];
+rule number = INTEGER / FLOATING;
+token INTEGER = trivia [0-9]+ ![a-zA-Z0-9];
+token FLOATING = trivia [0-9]+ "." [0-9]* [fF] ![a-zA-Z0-9];
 
-rule String = STRING_LITERAL;
-rule STRING_LITERAL = Trivia "\"" (!"\"" .)* "\"";
+rule string = STRING_LITERAL;
+token STRING_LITERAL = trivia "\"" (!"\"" .)* "\"";
 
-rule Whitespace = [ \t\n\r];
-rule Comment = "//" (!EOL .)* EOL;
-rule Trivia = (Whitespace / Comment)*;
+token WHITESPACE = [ \t\n\r];
+token COMMENT = "//" (!EOL .)* EOL;
+rule trivia = (WHITESPACE / COMMENT)*;
 
-rule EOF = !.;
-rule EOL = "\n" / "\r\n" / "\r";
+token EOF = !.;
+token EOL = "\n" / "\r\n" / "\r";
 
-rule EOKW = ![a-zA-Z0-9_];
-rule KW = FUN;
-rule FUN = Trivia "fun" EOKW;
+rule eokw = ![a-zA-Z0-9_];
+rule kw = FUN;
+token FUN = trivia "fun" eokw;
 
-rule DOT = Trivia "." !".";
-rule DOTDOT = Trivia "..";
-rule COMMA = Trivia ",";
-rule SEMICOLON = Trivia ";";
-rule PLUS = Trivia "+" !"+";
-rule PLUSPLUS = Trivia "++";
-rule HYPHEN = Trivia "-" !"-";
-rule HYPHENHYPHEN = Trivia "--";
-rule SLASH_F = Trivia "/" !"/";
-rule QUESTION_MARK = Trivia "?";
-rule STAR = Trivia "*" !"**";
-rule STARSTAR = Trivia "**";
-rule PAREN_L = Trivia "(";
-rule PAREN_R = Trivia ")";
-rule BRACES_L = Trivia "{";
-rule BRACES_R = Trivia "}";
+token DOT = trivia "." !".";
+token DOTDOT = trivia "..";
+token COMMA = trivia ",";
+token SEMICOLON = trivia ";";
+token PLUS = trivia "+" !"+";
+token PLUSPLUS = trivia "++";
+token HYPHEN = trivia "-" !"-";
+token HYPHENHYPHEN = trivia "--";
+token SLASH_F = trivia "/" !"/";
+token QUESTION_MARK = trivia "?";
+token STAR = trivia "*" !"**";
+token STARSTAR = trivia "**";
+token PAREN_L = trivia "(";
+token PAREN_R = trivia ")";
+token BRACES_L = trivia "{";
+token BRACES_R = trivia "}";

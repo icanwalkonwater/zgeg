@@ -1,45 +1,45 @@
 // Not actually used, just for reference.
 
-rule File = Rule* Trivia EOF;
-rule Rule = RuleKind IDENT EQUAL Expr SEMICOLON;
-rule RuleKind = RULE;
+rule file = item_rule* trivia EOF;
+rule item_rule = rule_kind IDENT EQUAL expr SEMICOLON;
+rule rule_kind = RULE;
 
-rule Expr = ExprChoice;
-rule ExprChoice = ExprSeq (SLASH_F ExprSeq)*;
-rule ExprSeq = ExprPredicate+;
-rule ExprPredicate = (AMPERSAND / EXCLAMATION)? ExprRepeat;
-rule ExprRepeat = ExprAtom RepeatOp?;
-rule ExprAtom = PAREN_L Expr PAREN_R / IDENT / DOT / LITERAL_KEYWORD / CharacterRanges;
+rule expr = expr_choice;
+rule expr_choice = expr_seq (SLASH_F expr_seq)*;
+rule expr_seq = expr_predicate+;
+rule expr_predicate = predicate_op? expr_repeat;
+rule expr_repeat = expr_atom repeat_op?;
+rule expr_atom = PAREN_L expr PAREN_R / IDENT / DOT / LITERAL / ranges;
 
-rule RepeatOp = STAR / PLUS / QUESTION;
+rule predicate_op = AND / BANG;
+rule repeat_op = STAR / PLUS / QUESTION;
 
-rule CharacterRanges = Trivia "[" (CharacterRangesRange / CharacterRangesIdent)+ "]";
-rule CharacterRangesIdent = "\\" . / !"]" .;
-rule CharacterRangesRange = CharacterRangesIdent "-" CharacterRangesIdent;
+rule ranges = trivia "[" (range_range / RANGE_SOLO)* "]";
+rule range_range = RANGE_SOLO "-" RANGE_SOLO;
+token RANGE_SOLO = "\\" . / !"]" .;
 
-rule Whitespace = [ \t\n\r]+;
-rule Comment = "//" + (!EOL .)* EOL;
-rule Trivia = (Whitespace / Comment)*;
-rule EOL = "\n" / "\r\n" / "\r" / EOF;
+rule trivia = (WHITESPACE / COMMENT)*;
+rule WHITESPACE = [ \t\n\r]+;
+rule COMMENT = "//" + (!eol .)* eol;
+rule EOL = "\n" / "\r\n" / "\r" / eof;
 rule EOF = !.;
-rule EOKW = ![a-zA-Z0-9_];
+rule eokw = ![a-za-z0-9_];
 
-rule LITERAL_KEYWORD = Trivia "\"" ("\\" . / !"\"" .)* "\"";
-rule IDENT = Trivia !KW [a-zA-Z_] [a-zA-Z0-9_]*;
-rule KW = RULE;
-rule INTEGER = Trivia [0-9] ![a-zA-Z0-9_];
+token LITERAL = trivia "\"" ("\\" . / !"\"" .)* "\"";
+token IDENT = trivia !kw [a-za-z_] [a-za-z0-9_]*;
+rule kw = rule;
 
-rule RULE = Trivia "rule" EOKW;
-rule EQUAL = Trivia "=";
-rule SLASH_F = Trivia "/";
-rule AMPERSAND = Trivia "&";
-rule EXCLAMATION = Trivia "!";
-rule STAR = Trivia "*";
-rule PLUS = Trivia "+";
-rule QUESTION = Trivia "?";
-rule COLON = Trivia ",";
-rule SEMICOLON = Trivia ";";
-rule PAREN_L = Trivia "(";
-rule PAREN_R = Trivia ")";
-rule BRACES_L = Trivia "{";
-rule BRACES_R = Trivia "}";
+token RULE = trivia "rule" eokw;
+token EQUAL = trivia "=";
+token SLASH_F = trivia "/";
+token AND = trivia "&";
+token BANG = trivia "!";
+token STAR = trivia "*";
+token PLUS = trivia "+";
+token QUESTION = trivia "?";
+token COLON = trivia ",";
+token SEMICOLON = trivia ";";
+token PAREN_L = trivia "(";
+token PAREN_R = trivia ")";
+token BRACES_L = trivia "{";
+token BRACES_R = trivia "}";

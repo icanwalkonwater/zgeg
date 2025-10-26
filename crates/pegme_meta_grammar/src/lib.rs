@@ -1,76 +1,80 @@
-use pegme_core::grammar::{dsl::*, PegGrammar};
+use pegme_core::grammar::Grammar;
 
-#[allow(non_snake_case)]
-pub fn make_meta_grammar() -> PegGrammar {
-    let mut g = PegGrammarBuilder::default();
-    declare_rules! {
-        g;
-        File,
-        Rule, RuleKind,
+pub fn make_meta_grammar() -> Grammar {
+    use pegme_core::grammar::dsl::*;
 
-        Expr, ExprChoice, ExprSeq, ExprPredicate, ExprRepeat, ExprAtom,
-        RepeatOp,
-        CharacterRanges,
-        CharacterRangesIdent,
-        CharacterRangesRange,
+    let range_ident_start = _ranges(vec!['a'..='z', 'A'..='Z', '_'..='_']);
+    let range_ident_continue = _ranges(vec!['a'..='z', 'A'..='Z', '0'..='9', '_'..='_']);
 
-        Whitespace, Comment, Trivia,
-        EOL, EOF, EOKW,
+    grammar! {
+        let file = item_rule.cast().star() - trivia - EOF;
+        let item_rule = rule_kind - IDENT - EQUAL - expr - SEMICOLON;
+        let rule_kind = RULE | TOKEN;
 
-        LITERAL_KEYWORD, IDENT, KW, INTEGER,
-        RULE,
-        EQUAL, SLASH_F, AMPERSAND, EXCLAMATION, STAR, PLUS, QUESTION, DOT,
-        COLON, SEMICOLON,
-        PAREN_L, PAREN_R,
-        BRACES_L, BRACES_R,
-    };
+        // Expressions.
+        let expr = expr_choice;
+        let expr_choice = expr_seq - _star(SLASH_F - expr_seq);
+        let expr_seq = _plus(expr_predicate);
+        let expr_predicate = _opt(predicate_op) - expr_repeat;
+        let expr_repeat = expr_atom - _opt(repeat_op);
+        let expr_atom = (PAREN_L - expr - PAREN_R) | IDENT | DOT | LITERAL | ranges;
 
-    File += star(&Rule) + &Trivia + &EOF;
-    Rule += &RuleKind + &IDENT + &EQUAL + &Expr + &SEMICOLON;
-    RuleKind += &RULE;
+        let predicate_op = AND | BANG;
+        let repeat_op = STAR | PLUS | QUESTION;
 
-    Expr += &ExprChoice;
-    ExprChoice += &ExprSeq + star(&SLASH_F + &ExprSeq);
-    ExprSeq += plus(&ExprPredicate);
-    ExprPredicate += opt(&AMPERSAND | &EXCLAMATION) + &ExprRepeat;
-    ExprRepeat += &ExprAtom + opt(&RepeatOp);
-    ExprAtom += &PAREN_L + &Expr + &PAREN_R;
-    ExprAtom += &IDENT | &DOT | &LITERAL_KEYWORD | &CharacterRanges;
+        let ranges = trivia - "[" - _star(range_range | RANGE_SOLO) - "]";
+        let range_range = RANGE_SOLO - "-" - RANGE_SOLO;
+        #[token]
+        let RANGE_SOLO = "\\" - _any() | _not("]") - _any();
 
-    RepeatOp += &STAR | &PLUS | &QUESTION;
+        // Whitespace.
+        let trivia = _star(WHITESPACE | COMMENT);
+        #[token]
+        let WHITESPACE = _plus(_ranges(vec![' '..=' ', '\t'..='\t', '\r'..='\r', '\n'..='\n']));
+        #[token]
+        let COMMENT = "//" - _star(_not(EOL) - _any()) - EOL;
+        #[token]
+        let EOL = _eps() - "\n" | "\r\n" | "\r" | EOF;
+        #[token]
+        let EOF = _not(_any());
+        let eokw = _not(range_ident_continue.clone());
 
-    CharacterRanges += &Trivia + "[" + plus(&CharacterRangesRange | &CharacterRangesIdent) + "]";
-    CharacterRangesIdent += "\\" + any();
-    CharacterRangesIdent += not("]") + any();
-    CharacterRangesRange += &CharacterRangesIdent + "-" + &CharacterRangesIdent;
+        // Variadic tokens.
+        #[token]
+        let LITERAL = trivia - "\"" - _star(
+            "\\" - _any() // escape sequence
+            | _not("\"") - _any()
+        ) - "\"";
+        #[token]
+        let IDENT = trivia - _not(kw) - range_ident_start.clone() - _star(range_ident_continue.clone());
+        let kw = RULE;
 
-    Whitespace += plus(class(" \t\n\r"));
-    Comment += "//" + star(not(&EOL) + any()) + &EOL;
-    Trivia += star(&Whitespace | &Comment);
-    EOL += eps() + "\n" | "\r\n" | "\r" | &EOF;
-    EOF += not(any());
-    EOKW += not(class("a-zA-Z0-9_"));
-
-    LITERAL_KEYWORD += &Trivia + "\"" + star("\\" + any() | not("\"") + any()) + "\"";
-    IDENT += &Trivia + not(&KW) + class("a-zA-Z_") + star(class("a-zA-Z0-9_"));
-    KW += &RULE;
-    INTEGER += &Trivia + plus(class("0-9")) + not(class("a-zA-Z0-9_"));
-
-    RULE += &Trivia + "rule";
-    EQUAL += &Trivia + "=";
-    SLASH_F += &Trivia + "/";
-    AMPERSAND += &Trivia + "&";
-    EXCLAMATION += &Trivia + "!";
-    STAR += &Trivia + "*";
-    PLUS += &Trivia + "+";
-    QUESTION += &Trivia + "?";
-    DOT += &Trivia + ".";
-    COLON += &Trivia + ",";
-    SEMICOLON += &Trivia + ";";
-    PAREN_L += &Trivia + "(";
-    PAREN_R += &Trivia + ")";
-    BRACES_L += &Trivia + "{";
-    BRACES_R += &Trivia + "}";
-
-    g.build()
+        // Static tokens.
+        #[token]
+        let RULE = trivia - "rule";
+        #[token]
+        let TOKEN = trivia - "token";
+        #[token]
+        let EQUAL = trivia - "=";
+        #[token]
+        let SLASH_F = trivia - "/";
+        #[token]
+        let AND = trivia - "&";
+        #[token]
+        let BANG = trivia - "!";
+        #[token]
+        let STAR = trivia - "*";
+        #[token]
+        let PLUS = trivia - "+";
+        #[token]
+        let QUESTION = trivia - "?";
+        #[token]
+        let DOT = trivia - ".";
+        #[token]
+        let SEMICOLON = trivia - ";";
+        #[token]
+        let PAREN_L = trivia - "(";
+        #[token]
+        let PAREN_R = trivia - ")";
+    }.unwrap()
 }

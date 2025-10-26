@@ -1,112 +1,64 @@
 use std::fmt::{self, Display, Formatter};
 
-use crate::grammar::PegTerminal;
+use super::*;
 
-use super::{PegExpression, PegGrammar, PegRule, PegRuleName};
-
-impl Display for PegGrammar {
+impl Display for Grammar {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for (name, rule) in &self.rules {
-            writeln!(f, "{name}: {rule}")?;
-            writeln!(f)?;
+        for r in self.rules() {
+            writeln!(f, "{r}")?;
         }
         Ok(())
     }
 }
 
-impl Display for PegRuleName {
+impl Display for GrammarRule {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl Display for PegRule {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.expr)
-    }
-}
-
-impl PegExpression {
-    fn is_atomic(&self) -> bool {
-        match self {
-            Self::Seq(_, _) => false,
-            _ => true,
+        if self.config.is_token {
+            write!(f, "token ")?;
+        } else {
+            write!(f, "rule ")?;
         }
+        write!(f, "{} = {};", self.name(), self.match_expression())
     }
 }
 
 impl Display for PegExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Terminal(t) => write!(f, "{t}"),
-            Self::Rule(nt) => write!(f, "{}", nt),
-            Self::Named(name, e) => {
-                write!(f, "{name}@")?;
-                match e.is_atomic() {
-                    true => write!(f, "{e}"),
-                    false => write!(f, "({e})"),
-                }
-            }
-            Self::Seq(l, r) => write!(f, "{l} {r}"),
-            Self::Choice(l, r) => write!(f, "({l} / {r})"),
-            Self::Repetition { expr: e, min, max } => {
-                match e.is_atomic() {
-                    true => write!(f, "{e}")?,
-                    false => write!(f, "({e})")?,
-                }
-                match (min, max) {
-                    (0, None) => write!(f, "*")?,
-                    (1, None) => write!(f, "+")?,
-                    (0, Some(1)) => write!(f, "?")?,
-                    (min, None) => write!(f, "[{min}:]")?,
-                    (min, Some(max)) => write!(f, "[{min}:{max}]")?,
-                }
-                Ok(())
-            }
-            Self::Predicate { expr: e, positive } => {
-                match positive {
-                    true => write!(f, "&")?,
-                    false => write!(f, "!")?,
-                }
-                match e.is_atomic() {
-                    true => write!(f, "{e}")?,
-                    false => write!(f, "({e})")?,
-                }
-                Ok(())
-            }
-            Self::Anything => write!(f, "."),
-            Self::Epsilon => write!(f, "ε"),
-        }
-    }
-}
-
-impl Display for PegTerminal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Exact(lit) => {
+            Self::Terminal(PegTerminal::Epsilon) => write!(f, "\\e"),
+            Self::Terminal(PegTerminal::Any) => write!(f, "."),
+            Self::Terminal(PegTerminal::Literal(lit)) => {
                 write!(f, "\"")?;
                 for c in lit.chars() {
                     write_char_escaped(f, c, true)?;
                 }
                 write!(f, "\"")
             }
-            Self::CharacterRanges(ranges) => {
+            Self::Terminal(PegTerminal::Ranges(ranges)) => {
                 write!(f, "[")?;
-                for &(from, to) in ranges {
-                    if from == to {
-                        write_char_escaped(f, from, false)?;
-                    } else {
-                        write_char_escaped(f, from, false)?;
+                for r in ranges {
+                    write_char_escaped(f, *r.start(), false)?;
+                    if r.start() != r.end() {
                         write!(f, "-")?;
-                        write_char_escaped(f, to, false)?;
+                        write_char_escaped(f, *r.end(), false)?;
                     }
                 }
                 write!(f, "]")
             }
-            Self::PredefinedAscii => write!(f, "[:Ascii:]"),
-            Self::PredefinedUtf8Whitespace => write!(f, "[:Utf8Whitespace:]"),
-            Self::PredefinedUtf8XidStart => write!(f, "[:Utf8XidStart:]"),
-            Self::PredefinedUtf8XidContinue => write!(f, "[:Utf8XidContinue:]"),
+            Self::NonTerminal { rule_name } => write!(f, "{rule_name}"),
+            Self::NamedNonTerminal { name, rule_name } => write!(f, "{name}@{rule_name}"),
+            Self::Seq { left, right } => write!(f, "{left} {right}"),
+            Self::Choice { left, right } => write!(f, "({left}) / ({right})"),
+            Self::Repetition { expr } => write!(f, "({expr})*"),
+            Self::Predicate {
+                positive: true,
+                expr,
+            } => write!(f, "&({expr})"),
+            Self::Predicate {
+                positive: false,
+                expr,
+                ..
+            } => write!(f, "!({expr})"),
         }
     }
 }

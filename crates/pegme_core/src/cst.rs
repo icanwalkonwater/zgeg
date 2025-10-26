@@ -70,21 +70,28 @@ where
         }
     }
 
-    pub fn iter_children(&self) -> impl Iterator<Item = &Arc<ConcreteSyntaxTree<K>>> {
+    pub fn children(&self) -> impl Iterator<Item = &Arc<ConcreteSyntaxTree<K>>> {
         match self {
             Self::Node { children, .. } => Either::Left(children.iter().map(|t| t)),
             Self::Leaf { .. } => Either::Right(std::iter::empty()),
         }
     }
 
+    pub fn only_child(&self) -> Option<&Arc<ConcreteSyntaxTree<K>>> {
+        match self {
+            Self::Node { children, .. } if children.len() == 1 => children.first(),
+            _ => None,
+        }
+    }
+
     pub fn find_child_by_kind(&self, kind: K) -> Option<&Arc<ConcreteSyntaxTree<K>>> {
-        self.iter_children().find(|t| t.is(kind.clone()))
+        self.children().find(|t| t.is(kind.clone()))
     }
 
     pub fn find_children_by_kind(
         &self,
         kind: K,
     ) -> impl Iterator<Item = &Arc<ConcreteSyntaxTree<K>>> {
-        self.iter_children().filter(move |t| t.is(kind.clone()))
+        self.children().filter(move |t| t.is(kind.clone()))
     }
 }

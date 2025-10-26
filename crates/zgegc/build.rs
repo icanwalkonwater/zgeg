@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use pegme_codegen::CodegenOptions;
+use pegme_codegen::ParserCodegenOptions;
 
 fn main() {
     let out_dir = std::env::var_os("OUT_DIR").unwrap();
@@ -11,8 +11,8 @@ fn main() {
     let code = pegme_codegen::parser_for_grammar(
         &grammar,
         "Zgeg".into(),
-        "File",
-        CodegenOptions {
+        "file",
+        ParserCodegenOptions {
             pegme_core_import: "pegme".into(),
         },
     );
